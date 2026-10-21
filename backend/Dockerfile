@@ -29,5 +29,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Entrypoint runs migrations and starts uvicorn
-CMD ["sh", "-c", "alembic upgrade head && python seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Entrypoint runs migrations, seeds demonstration fixtures, and starts uvicorn
+CMD ["sh", "-c", "alembic upgrade head && python seed.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

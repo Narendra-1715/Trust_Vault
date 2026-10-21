@@ -321,11 +321,24 @@ npm run dev
 
 ## 10. Docker Compose & Production Deployment
 
-For complete containerized execution (PostgreSQL 16, FastAPI backend, and Nginx reverse proxy):
+For comprehensive step-by-step instructions across Render, Railway, Vercel, and Cloud VMs (AWS EC2/DigitalOcean), refer to the dedicated [**Production Deployment Guide (DEPLOYMENT.md)**](DEPLOYMENT.md).
+
+### Quick Multi-Container Production Launch
 
 ```bash
-docker-compose up --build -d
+docker compose -f docker-compose.prod.yml up --build -d
 ```
+
+Or execute the automated deployment script on any Linux/macOS host:
+
+```bash
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
+
+### Turnkey 1-Click Cloud Deployment
+- **Render.com Blueprint:** Deploy managed PostgreSQL, FastAPI API, and React frontend via [`render.yaml`](render.yaml).
+- **Railway.app Deployment:** Deploy automatically using [`railway.json`](railway.json).
 
 ### Production Environment Variables
 
