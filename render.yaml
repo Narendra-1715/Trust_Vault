@@ -34,7 +34,6 @@ services:
   # Frontend Web UI (Render Free Static Site)
   - type: web
     name: trustvault-ui
-    plan: free
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
