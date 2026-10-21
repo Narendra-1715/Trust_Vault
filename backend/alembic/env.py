@@ -17,8 +17,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set database URL dynamically from app settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Set database URL dynamically from app settings with postgres protocol normalization
+target_url = settings.DATABASE_URL
+if target_url.startswith("postgres://"):
+    target_url = target_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif target_url.startswith("postgresql://") and not target_url.startswith("postgresql+"):
+    target_url = target_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+config.set_main_option("sqlalchemy.url", target_url)
 
 target_metadata = Base.metadata
 

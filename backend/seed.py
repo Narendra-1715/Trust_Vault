@@ -85,6 +85,7 @@ def seed_database():
             )
 
         print("[TrustVault Seeder] Creating sample documents in private storage...")
+        os.makedirs(storage_service.base_dir, exist_ok=True)
         # 1. Document 1 for Owner A: Financial PDF
         doc1_content = (
             b"%PDF-1.4\n"
