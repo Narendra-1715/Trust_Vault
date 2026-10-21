@@ -17,8 +17,8 @@ build/
 .npm
 
 # Storage and Local DB
-data/
-storage/
+/data/
+backend/data/
 *.db
 *.sqlite3
 *.log
