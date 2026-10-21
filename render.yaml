@@ -1,7 +1,8 @@
 services:
-  # Backend API Service
+  # Backend API Web Service (Render Free Tier)
   - type: web
     name: trustvault-api
+    plan: free
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -16,7 +17,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: STORAGE_DIR
-        value: /var/data/vault_storage
+        value: ./data/vault_storage
       - key: GEMINI_API_KEY
         value: AQ.Ab8RN6KneIAuL4Jiv9m4Ah3ty6LT3OksWBVtlmk11bkQiRhLlQ
       - key: AI_PROVIDER
@@ -29,14 +30,11 @@ services:
         value: "false"
       - key: BACKEND_CORS_ORIGINS
         value: "*"
-    disk:
-      name: trustvault-storage
-      mountPath: /var/data/vault_storage
-      sizeGB: 10
 
-  # Frontend Web UI (Static Site)
+  # Frontend Web UI (Render Free Static Site)
   - type: web
     name: trustvault-ui
+    plan: free
     runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
@@ -53,7 +51,8 @@ services:
           property: host
 
 databases:
+  # Managed PostgreSQL Database (Render Free Tier)
   - name: trustvault-postgres
+    plan: free
     databaseName: trustvault
     user: trustvault_user
-    plan: free

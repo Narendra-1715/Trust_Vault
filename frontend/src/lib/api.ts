@@ -8,7 +8,16 @@ import type {
   AIRecommendationResult
 } from '../types';
 
-const API_BASE = (import.meta.env.VITE_API_URL ? (import.meta.env.VITE_API_URL as string).replace(/\/+$/, '') : '') + '/api/v1';
+// Dynamically resolve API URL with automated protocol handling for cloud hosting (Render/Vercel)
+const rawUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+let apiUrl = '';
+if (rawUrl) {
+  const stripped = rawUrl.replace(/\/+$/, '');
+  apiUrl = stripped.startsWith('http://') || stripped.startsWith('https://')
+    ? stripped
+    : `https://${stripped}`;
+}
+const API_BASE = apiUrl + '/api/v1';
 
 export class ApiError extends Error {
   status: number;
