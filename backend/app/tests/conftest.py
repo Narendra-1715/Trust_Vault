@@ -17,7 +17,8 @@ from app.storage.local import LocalPrivateStorage, storage_service
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiters():
-    """Resets rate limiters before each test to prevent cross-test throttling."""
+    """Resets rate limiters and enforces deterministic mock AI before each test."""
+    settings.AI_PROVIDER = "mock"
     login_limiter.reset()
     upload_limiter.reset()
     ai_limiter.reset()

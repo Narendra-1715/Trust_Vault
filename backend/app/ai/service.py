@@ -32,7 +32,7 @@ class AIService:
         candidate_users: List[Dict[str, Any]],
         owner_email: str
     ) -> AIRecommendationResult:
-        if self.gemini_provider:
+        if self.gemini_provider and settings.AI_PROVIDER.lower() != "mock":
             try:
                 return self.gemini_provider.generate_recommendations(
                     document_id=document_id,
