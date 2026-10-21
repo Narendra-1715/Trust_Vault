@@ -91,10 +91,14 @@ storage_service = LocalPrivateStorage()
 def sanitize_filename(filename: str) -> str:
     """
     Sanitizes user-provided filename, stripping dangerous directory traversal or control characters.
+    Handles cross-platform path separators and double-dot traversal patterns safely.
     """
-    clean = os.path.basename(filename)
+    # Normalize backslashes to forward slashes across all platforms (Linux/Windows)
+    clean = filename.replace("\\", "/")
+    clean = os.path.basename(clean)
     clean = re.sub(r'[\\/*?:"<>|\x00-\x1f]', "", clean)
-    clean = clean.strip()
+    clean = re.sub(r'\.{2,}', "", clean)  # strip .. path traversal
+    clean = clean.strip(". ")
     return clean if clean else "document.bin"
 
 def validate_file_content(header_bytes: bytes, extension: str, content_type: str) -> None:
