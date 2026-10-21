@@ -3,9 +3,11 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { CheckCircle, AlertTriangle, RefreshCw, Filter } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
+import { useToast } from '../context/ToastContext';
 import type { AuditVerificationReport } from '../types';
 
 export const AuditPage: React.FC = () => {
+  const { toast } = useToast();
   const [actionFilter, setActionFilter] = useState('');
   const [outcomeFilter, setOutcomeFilter] = useState('');
   const [verificationReport, setVerificationReport] = useState<AuditVerificationReport | null>(null);
@@ -25,9 +27,14 @@ export const AuditPage: React.FC = () => {
     onSuccess: (data) => {
       setVerificationReport(data);
       refetch();
+      if (data.is_valid) {
+        toast.success(`Audit hash chain cryptographically verified: all ${data.total_events} events valid.`);
+      } else {
+        toast.error(`Audit chain compromised! Tampering detected at event index ${data.event_index}.`);
+      }
     },
     onError: (err: any) => {
-      alert(err.message || 'Verification failed');
+      toast.error(err.message || 'Verification failed');
     }
   });
 

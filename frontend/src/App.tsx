@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './features/auth/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { AppLayout } from './layouts/AppLayout';
 import { LandingPage } from './routes/LandingPage';
 import { LoginPage } from './routes/LoginPage';
@@ -40,46 +41,48 @@ export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<AppLayout />}>
-              <Route index element={<LandingPage />} />
-              <Route path="login" element={<LoginPage />} />
-              
-              {/* Protected Routes */}
-              <Route path="documents" element={
-                <ProtectedRoute>
-                  <DocumentsPage />
-                </ProtectedRoute>
-              } />
-              
-              <Route path="documents/:id" element={
-                <ProtectedRoute>
-                  <DocumentDetailPage />
-                </ProtectedRoute>
-              } />
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<AppLayout />}>
+                <Route index element={<LandingPage />} />
+                <Route path="login" element={<LoginPage />} />
+                
+                {/* Protected Routes */}
+                <Route path="documents" element={
+                  <ProtectedRoute>
+                    <DocumentsPage />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="documents/:id" element={
+                  <ProtectedRoute>
+                    <DocumentDetailPage />
+                  </ProtectedRoute>
+                } />
 
-              <Route path="audit" element={
-                <ProtectedRoute>
-                  <AuditPage />
-                </ProtectedRoute>
-              } />
+                <Route path="audit" element={
+                  <ProtectedRoute>
+                    <AuditPage />
+                  </ProtectedRoute>
+                } />
 
-              <Route path="admin" element={
-                <ProtectedRoute>
-                  <AdminPage />
-                </ProtectedRoute>
-              } />
+                <Route path="admin" element={
+                  <ProtectedRoute>
+                    <AdminPage />
+                  </ProtectedRoute>
+                } />
 
-              {/* Public Legal Pages */}
-              <Route path="privacy" element={<PrivacyPage />} />
-              <Route path="terms" element={<TermsPage />} />
+                {/* Public Legal Pages */}
+                <Route path="privacy" element={<PrivacyPage />} />
+                <Route path="terms" element={<TermsPage />} />
 
-              {/* 404 */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+                {/* 404 */}
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

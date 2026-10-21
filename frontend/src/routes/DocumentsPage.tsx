@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Plus, Search, Filter, Download, Eye, Lock } from 'lucide-react';
 import { api } from '../lib/api';
+import { useToast } from '../context/ToastContext';
 import { UploadModal } from '../features/documents/UploadModal';
 import type { DocumentItem } from '../types';
 
 export const DocumentsPage: React.FC = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -25,8 +27,9 @@ export const DocumentsPage: React.FC = () => {
     try {
       setDownloadingId(doc.id);
       await api.downloadDocument(doc.id, doc.original_filename);
+      toast.success(`Download started: ${doc.original_filename}`);
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     } finally {
       setDownloadingId(null);
     }

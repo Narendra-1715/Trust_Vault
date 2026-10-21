@@ -289,3 +289,15 @@ input, select, textarea {
   box-shadow: var(--shadow-md);
   padding: 1.5rem;
 }
+
+/* Toast Notification Animation */
+@keyframes toastSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

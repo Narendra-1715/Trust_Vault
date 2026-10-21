@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, RefreshCw, Lock } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../features/auth/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { AuditVerificationReport } from '../types';
 
 export const AdminPage: React.FC = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [verificationReport, setVerificationReport] = useState<AuditVerificationReport | null>(null);
 
@@ -29,8 +31,15 @@ export const AdminPage: React.FC = () => {
   // Verify Audit Chain Mutation
   const verifyMutation = useMutation({
     mutationFn: () => api.verifyAuditIntegrity(),
-    onSuccess: (data) => setVerificationReport(data),
-    onError: (err: any) => alert(err.message || 'Verification failed'),
+    onSuccess: (data) => {
+      setVerificationReport(data);
+      if (data.is_valid) {
+        toast.success(`Audit integrity verified: all ${data.total_events} events valid.`);
+      } else {
+        toast.error(`Audit chain corrupted at index ${data.event_index}!`);
+      }
+    },
+    onError: (err: any) => toast.error(err.message || 'Verification failed'),
   });
 
   // Update User Role/Status Mutation
@@ -40,8 +49,9 @@ export const AdminPage: React.FC = () => {
     onSuccess: () => {
       refetchUsers();
       queryClient.invalidateQueries({ queryKey: ['adminAuditEvents'] });
+      toast.success('User status/role updated successfully.');
     },
-    onError: (err: any) => alert(err.message || 'Update failed'),
+    onError: (err: any) => toast.error(err.message || 'Update failed'),
   });
 
   if (user?.role !== 'admin') {

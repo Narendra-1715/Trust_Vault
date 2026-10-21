@@ -17,6 +17,7 @@ import {
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
 import { useAuth } from '../features/auth/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { SuggestedGrant } from '../types';
 
 export const DocumentDetailPage: React.FC = () => {
@@ -24,6 +25,7 @@ export const DocumentDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'permissions' | 'ai' | 'audit'>('permissions');
   const [isEditingMeta, setIsEditingMeta] = useState(false);
@@ -76,8 +78,9 @@ export const DocumentDetailPage: React.FC = () => {
     if (!doc) return;
     try {
       await api.downloadDocument(doc.id, doc.original_filename);
+      toast.success(`Download started: ${doc.original_filename}`);
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      toast.error(err.message || 'Download failed');
     }
   };
 
@@ -101,8 +104,9 @@ export const DocumentDetailPage: React.FC = () => {
       });
       setIsEditingMeta(false);
       queryClient.invalidateQueries({ queryKey: ['document', id] });
+      toast.success('Document metadata updated successfully.');
     } catch (err: any) {
-      alert(err.message || 'Failed to update metadata');
+      toast.error(err.message || 'Failed to update metadata');
     }
   };
 
@@ -114,9 +118,10 @@ export const DocumentDetailPage: React.FC = () => {
     }
     try {
       await api.deleteDocument(doc.id);
+      toast.success('Document deleted successfully.');
       navigate('/documents');
     } catch (err: any) {
-      alert(err.message || 'Failed to delete document');
+      toast.error(err.message || 'Failed to delete document');
     }
   };
 
@@ -130,10 +135,12 @@ export const DocumentDetailPage: React.FC = () => {
         email: selectedUserEmail,
         permission_level: selectedPermLevel,
       });
+      toast.success(`Access granted to ${selectedUserEmail} (${selectedPermLevel}).`);
       setSelectedUserEmail('');
       refetchPerms();
     } catch (err: any) {
       setGrantError(err.message || 'Failed to grant permission');
+      toast.error(err.message || 'Failed to grant permission');
     }
   };
 
@@ -147,8 +154,9 @@ export const DocumentDetailPage: React.FC = () => {
       await api.revokePermission(doc.id, userId);
       refetchPerms();
       queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+      toast.success(`Access immediately revoked for ${userEmail}.`);
     } catch (err: any) {
-      alert(err.message || 'Failed to revoke access');
+      toast.error(err.message || 'Failed to revoke access');
     }
   };
 
@@ -163,8 +171,9 @@ export const DocumentDetailPage: React.FC = () => {
       setAiExplanation(res.recommendations.explanation);
       setAiModel(res.recommendations.provider_model);
       setIsMock(res.recommendations.is_mock);
+      toast.info('AI policy analysis completed with recommendations.');
     } catch (err: any) {
-      alert(err.message || 'AI recommendation request failed');
+      toast.error(err.message || 'AI recommendation request failed');
     } finally {
       setIsAiLoading(false);
     }
@@ -187,9 +196,9 @@ export const DocumentDetailPage: React.FC = () => {
       setAiSuggestions([]);
       refetchPerms();
       queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
-      alert('Approved AI access recommendations applied successfully.');
+      toast.success('Approved AI access recommendations applied successfully.');
     } catch (err: any) {
-      alert(err.message || 'Failed to approve AI suggestions');
+      toast.error(err.message || 'Failed to approve AI suggestions');
     }
   };
 
@@ -204,9 +213,9 @@ export const DocumentDetailPage: React.FC = () => {
       setPendingSuggestionId(null);
       setAiSuggestions([]);
       queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
-      alert('AI recommendations rejected. Zero permissions were granted.');
+      toast.info('AI recommendations rejected. Zero permissions were granted.');
     } catch (err: any) {
-      alert(err.message || 'Failed to reject AI suggestions');
+      toast.error(err.message || 'Failed to reject AI suggestions');
     }
   };
 
