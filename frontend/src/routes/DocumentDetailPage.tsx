@@ -533,8 +533,13 @@ export const DocumentDetailPage: React.FC = () => {
               <div style={{ marginTop: '1.5rem', border: '1px solid var(--border-main)', borderRadius: 'var(--radius-sm)', padding: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className="badge badge-blue">
-                      Provider: {aiModel || 'Gemini'} {isMock ? '(Deterministic Mock Mode)' : '(Live API)'}
+                    <span 
+                      className="badge badge-blue" 
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
+                      title={`Engine: ${aiModel || 'TrustVault Policy Intelligence'}`}
+                    >
+                      <Sparkles size={13} />
+                      <span>Policy Engine: Enterprise Access Advisor {isMock ? '(Sandbox Mode)' : '(Active)'}</span>
                     </span>
                     <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                       {aiSuggestions.length} candidates proposed
