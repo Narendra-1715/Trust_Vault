@@ -15,6 +15,7 @@ import {
   Key
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatToIST } from '../lib/date';
 import { useAuth } from '../features/auth/AuthContext';
 import type { SuggestedGrant } from '../types';
 
@@ -454,7 +455,7 @@ export const DocumentDetailPage: React.FC = () => {
                       </td>
                       <td style={{ fontSize: '0.8125rem' }}>{p.granted_by_email || 'Owner'}</td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                        {new Date(p.granted_at).toLocaleString()}
+                        {formatToIST(p.granted_at)}
                       </td>
                       {isOwner && (
                         <td style={{ textAlign: 'right' }}>
@@ -607,7 +608,7 @@ export const DocumentDetailPage: React.FC = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Timestamp (UTC)</th>
+                <th>Timestamp (IST)</th>
                 <th>Action</th>
                 <th>Actor</th>
                 <th>Outcome</th>
@@ -619,7 +620,7 @@ export const DocumentDetailPage: React.FC = () => {
                 auditEvents.events.map((e) => (
                   <tr key={e.id}>
                     <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                      {new Date(e.timestamp).toLocaleString()}
+                      {formatToIST(e.timestamp)}
                     </td>
                     <td>
                       <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{e.action}</span>

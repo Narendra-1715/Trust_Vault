@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 class AuditEventResponse(BaseModel):
     id: str
@@ -15,6 +15,12 @@ class AuditEventResponse(BaseModel):
     structured_metadata: Dict[str, Any]
     previous_event_hash: str
     event_hash: str
+
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
     model_config = ConfigDict(from_attributes=True)
 

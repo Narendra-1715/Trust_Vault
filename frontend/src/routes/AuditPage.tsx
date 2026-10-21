@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { CheckCircle, AlertTriangle, RefreshCw, Filter } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatToIST } from '../lib/date';
 import type { AuditVerificationReport } from '../types';
 
 export const AuditPage: React.FC = () => {
@@ -130,7 +131,7 @@ export const AuditPage: React.FC = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Timestamp (UTC)</th>
+                <th>Timestamp (IST)</th>
                 <th>Action</th>
                 <th>Actor</th>
                 <th>Resource</th>
@@ -142,7 +143,7 @@ export const AuditPage: React.FC = () => {
               {auditData.events.map((e) => (
                 <tr key={e.id}>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                    {new Date(e.timestamp).toLocaleString()}
+                    {formatToIST(e.timestamp)}
                   </td>
                   <td>
                     <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.8125rem' }}>
