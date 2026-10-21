@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trustvault_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trustvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trustvault_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-trustvault}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trustvault} -d ${POSTGRES_DB:-trustvault}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trustvault_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trustvault_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-trustvault}:${POSTGRES_PASSWORD:-trustvault_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-trustvault}
+      SECRET_KEY: ${SECRET_KEY:-trustvault_super_secure_production_secret_key_change_me_2026}
+      STORAGE_DIR: /app/data/vault_storage
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-AQ.Ab8RN6KneIAuL4Jiv9m4Ah3ty6LT3OksWBVtlmk11bkQiRhLlQ}
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      AI_MODEL: ${AI_MODEL:-gemini-3.8-flash}
+      ENVIRONMENT: production
+      DEBUG: "false"
+    volumes:
+      - vault_private_storage:/app/data/vault_storage
+    networks:
+      - trustvault_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trustvault_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - trustvault_net
+
+volumes:
+  postgres_data:
+  vault_private_storage:
+
+networks:
+  trustvault_net:
+    driver: bridge
