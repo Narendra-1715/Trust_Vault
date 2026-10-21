@@ -3,8 +3,12 @@
 > **Enterprise Confidential Document Management Platform**  
 > *Engineered around server-side zero-trust authorization, transactional access revocation, tamper-evident cryptographic auditing, and human-in-the-loop AI assistance.*
 
+🌐 **Live Application**: [https://trustvault-ui.onrender.com](https://trustvault-ui.onrender.com/)  
+📚 **API Documentation**: [https://trustvault-api-s6ba.onrender.com/docs](https://trustvault-api-s6ba.onrender.com/docs)
+
 ---
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-trustvault--ui.onrender.com-brightgreen?style=flat-square&logo=render)](https://trustvault-ui.onrender.com/)
 [![CI Pipeline](https://github.com/Narendra-1715/Trust_Vault/actions/workflows/ci.yml/badge.svg)](https://github.com/Narendra-1715/Trust_Vault/actions)
 [![Security Architecture](https://img.shields.io/badge/Security-Zero--Trust%20Server--Side-blue?style=flat-square)](THREATS.md)
 [![Audit Ledger](https://img.shields.io/badge/Audit-SHA--256%20Hash%20Chained-emerald?style=flat-square)](#4-tamper-evident-cryptographic-audit-ledger)
