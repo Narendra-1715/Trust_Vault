@@ -125,9 +125,38 @@ flowchart LR
 
 ### Mathematical Formulation
 
-$$\text{CanonicalPayload}_i = \text{CanonicalJSON}\Big(\text{id}, \text{timestamp}_{\text{UTC}}, \text{actor\_id}, \text{action}, \text{resource\_type}, \text{resource\_id}, \text{outcome}, \text{metadata}, \text{previous\_event\_hash}\Big)$$
+Every event $i$ produces an immutable cryptographic digest $H_i$ linked directly to the prior digest $H_{i-1}$:
 
-$$\text{event\_hash}_i = \text{SHA-256}\Big(\text{CanonicalPayload}_i\Big)$$
+$$H_i = \operatorname{SHA-256}\Big(\operatorname{CanonicalJSON}(e_i)\Big)$$
+
+where the canonical payload $e_i$ is deterministically ordered:
+
+$$e_i = \Big( \text{id}, \text{timestamp}_{\text{UTC}}, \text{actor}, \text{action}, \text{resource}, \text{outcome}, \text{metadata}, H_{i-1} \Big)$$
+
+For the genesis event ($i = 0$):
+
+$$H_0 = 0^{64}$$
+
+Canonical serialization ensures byte-for-byte consistency before hashing:
+
+```json
+{
+  "action": "document.upload",
+  "actor_id": "3b2c1a44-...",
+  "id": "e7d8f9a0-...",
+  "outcome": "success",
+  "previous_event_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "request_id": "a1b2c3d4-...",
+  "resource_id": "f5e4d3c2-...",
+  "resource_type": "document",
+  "structured_metadata": {
+    "category": "Financial",
+    "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "filename": "Q3_Audit.pdf"
+  },
+  "timestamp": "2026-10-21T18:07:53.804589Z"
+}
+```
 
 - **Deterministic Normalization:** Timestamps are normalized to strict ISO-8601 UTC strings (`%Y-%m-%dT%H:%M:%S.%fZ`), preventing serialization divergence across database engines.
 - **Verification Engine:** Executed via `GET /api/v1/audit/verify`. Recalculates the hash chain from genesis ($0^{64}$) forward. Any altered payload, deleted row, or reordered sequence causes an immediate hash mismatch and identifies the exact tampered record.
