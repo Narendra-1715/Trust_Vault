@@ -8,15 +8,32 @@ import type {
   AIRecommendationResult
 } from '../types';
 
-// Dynamically resolve API URL with automated protocol handling for cloud hosting (Render/Vercel)
-const rawUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-let apiUrl = '';
-if (rawUrl) {
-  const stripped = rawUrl.replace(/\/+$/, '');
-  apiUrl = stripped.startsWith('http://') || stripped.startsWith('https://')
-    ? stripped
-    : `https://${stripped}`;
+// Dynamically resolve API URL with automated protocol & domain handling for cloud hosting (Render/Vercel)
+function resolveApiUrl(raw?: string): string {
+  if (!raw) return '';
+  let stripped = raw.trim().replace(/\/+$/, '');
+  
+  if (!stripped.startsWith('http://') && !stripped.startsWith('https://')) {
+    // If Render passes an internal service name like "trustvault-api-s6ba" (no dot), append .onrender.com
+    if (!stripped.includes('.') && !stripped.includes(':') && stripped !== 'localhost') {
+      stripped = `${stripped}.onrender.com`;
+    }
+    return `https://${stripped}`;
+  }
+  
+  try {
+    const parsed = new URL(stripped);
+    if (!parsed.hostname.includes('.') && parsed.hostname !== 'localhost') {
+      parsed.hostname = `${parsed.hostname}.onrender.com`;
+      return parsed.origin;
+    }
+  } catch {
+    // fallback if malformed
+  }
+  return stripped;
 }
+
+const apiUrl = resolveApiUrl(import.meta.env.VITE_API_URL as string | undefined);
 const API_BASE = apiUrl + '/api/v1';
 
 export class ApiError extends Error {
