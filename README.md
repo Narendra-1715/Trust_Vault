@@ -127,7 +127,7 @@ flowchart LR
 
 Every event $i$ produces an immutable cryptographic digest $H_i$ linked directly to the prior digest $H_{i-1}$:
 
-$$H_i = \operatorname{SHA-256}\Big(\operatorname{CanonicalJSON}(e_i)\Big)$$
+$$H_i = \mathrm{SHA256}\Big(\mathrm{CanonicalJSON}(e_i)\Big)$$
 
 where the canonical payload $e_i$ is deterministically ordered:
 
