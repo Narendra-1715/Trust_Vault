@@ -1,171 +1,131 @@
-# TRUSTVAULT FINAL SECURITY BLOCKER INVESTIGATION & AUDIT REPORT
+# TRUSTVAULT PRODUCTION RELEASE GATE & AUDIT VALIDATION REPORT
 
-**Document Version:** 3.0.0 (Adversarial Blocker Investigation Edition)  
+**Document Version:** 4.0.0 (Production Release Gate Edition)  
 **Date:** October 23, 2026  
-**Auditing Role:** Independent Application Security, Adversarial Penetration Testing & Cryptographic Verification Group  
-**Target Repository:** `https://github.com/Narendra-1715/Trust_Vault.git`  
-**Target Environments:**
-- Local Staging / Test Harness: `http://localhost:8000` / SQLite + PostgreSQL Engine
-- Production Cloud API: `https://trustvault-api-s6ba.onrender.com`
-- Production Cloud Frontend: `https://trustvault-ui.onrender.com`
+**Auditing Group:** Independent Application Security, Adversarial Penetration Testing & Cryptographic Verification Group  
+**Repository:** `https://github.com/Narendra-1715/Trust_Vault.git`  
+**Audited Commit:** [`03c5150`](https://github.com/Narendra-1715/Trust_Vault/commit/03c5150) (Active on Live Render API)  
+**Evaluated Endpoints:**
+- Live API: `https://trustvault-api-s6ba.onrender.com`
+- Live UI: `https://trustvault-ui.onrender.com`
 
 ---
 
-## 1. Executive Summary & Release Determination
+## 1. Executive Release Decision
 
-### **FINAL RELEASE STATUS: CONDITIONAL (RELEASE-READY UPON STORAGE VOLUME ATTACHMENT)**
+### **FINAL RELEASE STATUS: BLOCKED**
+**(Reason: Persistent Private Storage Gate Blocked on Live Cloud Infrastructure)**
 
-An adversarial investigation was conducted across the 6 priority areas specified by the security directive:
-1. **Real Document Persistence:** Uncovered and removed a silent data-loss concealment mechanism that fabricated fake placeholder bytes upon missing storage files. Confirmed that production Render free-tier uses an ephemeral filesystem that purges user uploads upon container sleep.
-2. **Administrator Authorization:** Discovered and eliminated a critical privilege-escalation vulnerability where anonymous users could self-register with `role="admin"`. Confirmed zero-trust document isolation against administrators.
-3. **Full Authorization Coverage:** All registered API routes and HTTP methods were verified across 6 personas.
-4. **Real Concurrency & Revocation:** Documented exact transactional isolation guarantees. In-flight TCP socket bytes cannot be recalled once streamed; subsequent requests fail synchronously with 404.
-5. **Production Source & Telemetry:** Exposed `commit_sha` in the `/api/v1/health` endpoint for verifiable release tracking.
-6. **Audit Ledger Trust Boundaries:** Verified SHA-256 canonical JSON hash-chain coverage across all security-relevant fields. Documented DBA forward-recomputation limitations.
+> [!IMPORTANT]
+> **Summary of Release Gate Determination:**
+> 1. **Application Security & Authorization:** **PASSED.** Public admin registration is blocked (HTTP 422/403 verified live). Viewer user enumeration is blocked (HTTP 403 verified live). Peer document owner isolation is enforced (HTTP 404 verified live). Pre-download SHA-256 checksum integrity verification is implemented. Silent data-loss concealment has been removed and replaced with truthful error handling (HTTP 500 verified live).
+> 2. **Production Commit Parity:** **CONFIRMED LIVE.** The live production health endpoint reports `commit_sha: "03c515022423f556b3b18f86101d7ea8eb611579"`.
+> 3. **Production Storage Durability:** **BLOCKED.** The live Render deployment currently operates on the `free` plan using an ephemeral local disk (`./data/vault_storage`). While the persistent disk configuration has been added to `render.yaml`, activating persistent disk hardware on Render requires upgrading to the Starter plan in the Render Dashboard. Until this persistent volume is mounted and verified across a container redeploy, the production release gate remains strictly **BLOCKED**.
 
 ---
 
-## 2. Priority 1: Real Document Persistence & Silent Data Corruption
+## 2. Clarification of Directory Sharing & Peer Document Isolation
 
-### 2.1 The Vulnerability (Silent Fake File Synthesis)
-In previous revisions of `backend/app/api/v1/documents.py` (lines 269–287), the download endpoint contained an auto-regeneration fallback:
-```python
-if not storage_service.exists(doc.internal_storage_key):
-    # Auto-regenerate placeholder file for cloud ephemeral environments
-    file_path = storage_service._resolve_safe_path(doc.internal_storage_key)
-    with open(file_path, "wb") as f:
-        f.write(b"%PDF-1.4... (TRUSTVAULT CONFIDENTIAL DOCUMENT REPOSITORY)...")
+TrustVault is architected as a **single-organization confidential document repository**:
+- Users belong to the same organizational domain (`@trustvault.com`).
+- **Owner A** (e.g., Alice in Accounting) and **Owner B** (e.g., Bob in Engineering) are peer colleagues within the same company.
+- Calling Owner B "Cross-Tenant" in earlier drafts was imprecise. Owner B is an **unrelated document owner (peer colleague in the same organization)**.
+
+### Policy Enforcement Invariants:
+1. **Directory Access (`GET /api/v1/users`):**
+   - Document owners (Owner A and Owner B) can access the company directory to select coworkers for document sharing.
+   - Non-admins receive only minimal directory information: [`UserDirectoryItem`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/schemas/user.py) (`id`, `email`, `display_name`, `role`). Internal account metadata (`created_at`, `updated_at`, `is_active`) is omitted.
+   - Viewers cannot grant permissions and have no legitimate sharing need. Viewers attempting `GET /api/v1/users` are strictly rejected with `HTTP 403 Forbidden: Viewers are not authorized to enumerate organization members.` (Verified live on production).
+2. **Peer Document Isolation:**
+   - Peer document owners cannot access each other's unshared documents.
+   - Owner B attempting `GET /api/v1/documents/{doc_a_id}` or `GET /api/v1/documents/{doc_a_id}/download` receives `HTTP 404 Not Found`. (Verified live on production).
+   - Owner B searching for keywords in Owner A's private documents receives `0` results.
+   - Verified by regression test [`test_peer_owner_isolation_in_same_organization`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_authorization.py#L176-L203).
+
+---
+
+## 3. Real Restart & Durable Storage Verification
+
+### 3.1 Local Simulated Restart Test ([`verify_storage_restart_persistence.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/scripts/verify_storage_restart_persistence.py))
+An automated test simulated a complete server restart:
+1. Owner A uploaded a unique 1,087-byte file (`SHA-256: 86ccc597c45e82d8ebb5a6ca1594bd120632f3d51f21436585ef74d711680109`).
+2. Granted Viewer A read access.
+3. Destroyed the client session, reset in-memory state, and initialized a fresh client against the persistent disk.
+4. Viewer A downloaded the document on the new instance.
+5. **Exact Match:** Downloaded bytes matched the original 1,087 bytes byte-for-byte; SHA-256 checksum matched `86ccc597...` with zero discrepancy.
+6. Owner revoked access; immediate subsequent download was denied with `HTTP 404 Not Found`.
+7. Verified complete audit trail: `document.upload`, `document.download`, `document.download.denied`.
+
+### 3.2 Live Cloud Ephemerality Proof
+Probing a document uploaded on Render during a previous session (`06bbb073-cc08-49f5-8f22-ae82adb2a801`):
+```http
+GET /api/v1/documents/06bbb073-cc08-49f5-8f22-ae82adb2a801/download
+HTTP/1.1 500 Internal Server Error
+{"detail":"Storage object missing. Document data cannot be retrieved from private volume."}
 ```
-**Impact:**
-- If a genuine user uploaded a confidential balance sheet or tax return, and the container restarted on an ephemeral disk, the user's file was deleted from disk.
-- When the user requested their document, TrustVault silently fabricated a fake dummy PDF, wrote it to disk, logged a `document.download` **success** event, and returned the fake file!
-- The returned file size mismatched `doc.file_size`, and the content checksum mismatched `doc.checksum`.
-
-### 2.2 The Remediation
-The silent fallback was completely excised from [`backend/app/api/v1/documents.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/api/v1/documents.py#L269-L287). If a storage file is absent, the system fails safely and visibly:
-```python
-if not storage_service.exists(doc.internal_storage_key):
-    log_audit_event(
-        db=db,
-        action="document.download.error",
-        resource_type="document",
-        resource_id=doc.id,
-        outcome="failure",
-        actor_id=current_user.id,
-        request_id=request_id,
-        metadata={"error": "Storage payload missing from private volume", "filename": doc.original_filename}
-    )
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Storage object missing. Document data cannot be retrieved from private volume."
-    )
-```
-**Verification:** Added regression test [`test_missing_storage_file_fails_safely_without_silent_fabrication`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_storage_uploads.py#L53-L80) in `test_storage_uploads.py`. **Passed.**
-
-### 2.3 Production Storage Architecture Limitation
-- In `render.yaml`, `trustvault-api` is configured on the `plan: free` tier with `STORAGE_DIR: ./data/vault_storage`.
-- Render free tier containers use an **ephemeral disk**. When the free web service sleeps (after 15 minutes of inactivity) or redeploys, the local storage directory is wiped, while the PostgreSQL database retains document metadata.
-- **Production Requirement:** For production document durability, a persistent storage volume (Render Starter Plan with Disk or AWS S3 Object Storage) must be mounted.
+**Conclusion:** The live Render free-tier container wiped the physical file upon container redeploy. The API now safely returns `HTTP 500` rather than fabricating fake files, but durable persistence cannot be guaranteed in production until a persistent disk is mounted.
 
 ---
 
-## 3. Priority 2: Administrator Authorization & Role Boundary Audit
+## 4. Empirical Live Production Probes (Commit `03c5150`)
 
-### 3.1 The Vulnerability: Public Administrative Self-Registration
-Inspection of `backend/app/api/v1/auth.py` and `backend/app/schemas/user.py` revealed that `POST /api/v1/auth/register` accepted `role: str` without validation against administrative escalation:
-```python
-# Before fix:
-new_user = User(
-    email=normalized_email,
-    password_hash=hash_password(user_in.password),
-    display_name=user_in.display_name.strip(),
-    role=user_in.role,  # Attacker supplied "admin" -> registered as full admin!
-    is_active=True
-)
-```
-**Impact:** Any anonymous external user could send `{"role": "admin"}` and gain platform administrative rights, allowing them to view user inventories, de-activate accounts, and inspect organization-wide audit logs.
+Live probes executed against `https://trustvault-api-s6ba.onrender.com` on October 23, 2026:
 
-### 3.2 The Remediation
-1. Updated [`backend/app/schemas/user.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/schemas/user.py#L21) to restrict `UserCreate`:
-   `role: str = Field(default="owner", pattern="^(owner|viewer)$")`
-2. Added defense-in-depth check in [`backend/app/api/v1/auth.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/api/v1/auth.py#L104-L109):
-   ```python
-   if user_in.role == "admin":
-       raise HTTPException(
-           status_code=status.HTTP_403_FORBIDDEN,
-           detail="Self-registration as administrator is not permitted. Administrative accounts must be provisioned."
-       )
-   ```
-**Verification:** Added regression test [`test_admin_self_registration_rejected`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_auth.py#L51-L61) in `test_auth.py`. **Passed (HTTP 422/403).**
-
-### 3.3 Zero-Trust Admin Document Separation Confirmed
-In [`backend/app/policies/authorization.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/policies/authorization.py#L27-L43), `can_read_document` strictly enforces that **Admins do not automatically have document content access**. An administrator attempting `GET /documents/{id}/download` on a document they do not own and have not been granted receives `HTTP 404 Not Found`.
+1. **Commit Parity & Telemetry:**
+   - Request: `GET /api/v1/health`
+   - Response: `{"status":"healthy","service":"TrustVault API","version":"1.0.0","commit_sha":"03c515022423f556b3b18f86101d7ea8eb611579"}`
+   - Result: **CONFIRMED LIVE PARITY with Git commit `03c5150`.**
+2. **Admin Self-Registration Block:**
+   - Request: `POST /api/v1/auth/register` with `{"role": "admin", ...}`
+   - Response: `HTTP 422 Unprocessable Entity: String should match pattern '^(owner|viewer)$'`
+   - Result: **VERIFIED LIVE BLOCKED.**
+3. **Viewer User Enumeration Block:**
+   - Request: `GET /api/v1/users` as `viewer_a@trustvault.com`
+   - Response: `HTTP 403 Forbidden: Viewers are not authorized to enumerate organization members.`
+   - Result: **VERIFIED LIVE BLOCKED.**
+4. **Data Minimization for Owners:**
+   - Request: `GET /api/v1/users` as `owner_a@trustvault.com`
+   - Response: `HTTP 200 OK`. Returned fields: `['id', 'email', 'display_name', 'role']` (`created_at`, `updated_at`, `is_active` stripped).
+   - Result: **VERIFIED LIVE MINIMAL.**
+5. **Peer Document Isolation:**
+   - Request: `GET /api/v1/documents/df3340c5-0296-407c-b928-540b90a03542` as `owner_b@trustvault.com` (Unshared Doc 2)
+   - Response: `HTTP 404 Not Found` (Metadata and Download).
+   - Result: **VERIFIED LIVE ISOLATION.**
+6. **Missing File Truthful Error:**
+   - Request: `GET /api/v1/documents/06bbb073-cc08-49f5-8f22-ae82adb2a801/download`
+   - Response: `HTTP 500 Internal Server Error: Storage object missing.`
+   - Result: **VERIFIED LIVE FAIL-SAFE.**
 
 ---
 
-## 4. Priority 4: Concurrency, Revocation & In-Flight Stream Guarantees
+## 5. Master Release Gate Verification Table
 
-1. **Transactional Isolation:**
-   - Permissions are evaluated within live database transactions reading `revoked_at IS NULL`.
-   - Revocation (`DELETE /api/v1/documents/{id}/permissions/{user_id}`) executes `db.commit()` synchronously setting `revoked_at`.
-   - Any concurrent request arriving after the commit completes is immediately denied with `HTTP 404 Not Found`.
-2. **In-Flight Stream Reality:**
-   - If a large file download is *already actively transmitting TCP packets* over the wire before the revocation transaction commits, bytes already in socket/proxy buffers will reach the client.
-   - **Guaranteed Invariant:** Revocation applies to every new byte request and chunk initiation. Once the connection terminates, no subsequent requests, previews, or resumed downloads can occur.
-
----
-
-## 5. Priority 5 & 6: Production Telemetry & Audit Cryptographic Limits
-
-### 5.1 Deployment Telemetry (`commit_sha`)
-Updated [`backend/app/core/config.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/core/config.py#L10) and [`backend/app/api/v1/health.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/api/v1/health.py#L27-L32) to expose `commit_sha` populated from `RENDER_GIT_COMMIT` or `GIT_COMMIT`. This eliminates ambiguity regarding deployed container revisions.
-
-### 5.2 Audit Hash Chain Trust Boundaries
-- **Covered Fields:** `id`, `timestamp` (UTC ISO-8601), `actor_id`, `action`, `resource_type`, `resource_id`, `outcome`, `request_id`, `structured_metadata`, and `previous_event_hash`.
-- **Tamper Detection Capability:** Mathematically detects any single or multi-row modification, insertion, deletion, or reordering by application users, compromised services, or external attackers.
-- **Accepted Architectural Limitation:** A privileged database administrator (DBA) or an adversary with direct root SQL write access can alter a row and sequentially recompute all downstream hashes forward.
-- **Enterprise Recommendation:** Schedule an automated process to anchor hourly Merkle roots to external WORM storage (AWS S3 Object Lock).
+| Gate Area | Status | Evidence & Test Reference | Live Production Confirmation |
+| :--- | :--- | :--- | :--- |
+| **Admin Self-Registration** | **FIXED & VERIFIED** | Schema pattern `^(owner\|viewer)$` + 403 guard. [`test_admin_self_registration_rejected`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_auth.py#L51-L61). | Live HTTP 422 rejection verified. |
+| **Missing-File Handling** | **FIXED & VERIFIED** | Removed silent synthesis. Raises visible 500. [`test_missing_storage_file_fails_safely_without_silent_fabrication`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_storage_uploads.py#L53-L80). | Live HTTP 500 failure verified. |
+| **Download Checksum Validation** | **FIXED & VERIFIED** | `compute_checksum` verifies disk bytes against `doc.checksum`. [`test_storage_checksum_corruption_detection`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_authorization.py#L159-L174). | Verified in test suite. |
+| **User Directory Restriction** | **FIXED & VERIFIED** | Viewers receive 403. Non-admins receive minimal fields. [`test_viewer_cannot_enumerate_users`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_authorization.py#L122-L127). | Live HTTP 403 rejection verified. |
+| **Peer Owner Document Isolation** | **FIXED & VERIFIED** | Peer owners receive 404 on unshared files. [`test_peer_owner_isolation_in_same_organization`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_authorization.py#L176-L203). | Live HTTP 404 rejection verified. |
+| **Synchronous Revocation** | **FIXED & VERIFIED** | Synchronously sets `revoked_at`. Subsequent download returns 404. [`test_revocation.py`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/tests/test_revocation.py). | Verified in E2E and verifier suites. |
+| **Production Commit Parity** | **CONFIRMED** | `/api/v1/health` reports `commit_sha`. | Live API returns `03c5150...`. |
+| **Persistent Private Storage** | **BLOCKED** | Render free tier uses ephemeral disk. `render.yaml` updated with `disk:` config. | Requires Render Starter plan upgrade. |
 
 ---
 
-## 6. Priority 7: Blocker & Finding Verification Table
+## 6. Actionable Next Steps to Unblock Production Release
 
-| Issue ID | Severity | Root Cause & Attack Path | Reproduction Test | Fix Status | Regression Test Result | Production Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **BLK-01** | **Critical** | Privilege escalation via `role="admin"` in `POST /api/v1/auth/register`. | Send registration request with `role="admin"`. | **FIXED** (Schema regex + 403 guard) | `test_admin_self_registration_rejected` **PASSED** | Ready for redeploy |
-| **BLK-02** | **High** | Data-loss concealment: `download_document` fabricated fake files on missing storage keys. | Request download for document whose physical file is deleted. | **FIXED** (Removed auto-regen; returns visible 500 error) | `test_missing_storage_file_fails_safely_without_silent_fabrication` **PASSED** | Ready for redeploy |
-| **BLK-03** | **High** | Production cloud storage is ephemeral on Render free plan (`./data/vault_storage`). | Container restart purges uploaded files. | **DOCUMENTED** (Requires Render Starter disk or S3 bucket) | Verified via `render.yaml` inspection | **CONDITIONAL** (Requires paid volume) |
-| **SEC-01** | **Medium** | Health check did not expose verifiable deployment commit hash. | Query `/api/v1/health`. | **FIXED** (Added `commit_sha` telemetry) | Verified locally | Ready for redeploy |
-| **SEC-02** | **Medium** | Hash chain forward-recomputation possible by privileged DBA. | Sequentially recompute SHA-256 chain. | **DOCUMENTED** (Requires external WORM anchor) | Verified via `audit_verifier_suite.py` | Documented residual risk |
-| **SEC-03** | **Low** | DOM watermarking cannot block OS-level screenshot tools. | OS Snipping Tool / Camera. | **DOCUMENTED** (Attribution & deterrence only) | Verified in React preview component | Operational control active |
-
----
-
-## 7. Verification Execution Commands & Exit Codes
-
-```powershell
-# 1. Full Pytest Backend Security Suite (25 Tests)
-$env:PYTHONPATH="backend"; pytest backend/app/tests -v
-# Output: 25 passed in 32.52s (Code 0)
-
-# 2. Complete 12-Step Multi-Tenant Journey
-$env:PYTHONPATH="backend"; python backend/scripts/verify_e2e_journeys.py
-# Output: ALL 12 END-TO-END STEPS PASSED 100% (Code 0)
-
-# 3. Adversarial Authorization Matrix & Tamper Verification
-$env:PYTHONPATH="backend"; python backend/scripts/audit_verifier_suite.py
-# Output: ALL ADVERSARIAL VALIDATION TESTS COMPLETED SUCCESSFULLY (Code 0)
-
-# 4. Frontend AST Linter & Production Build
-npm --prefix frontend run lint; npm --prefix frontend run build
-# Output: 0 lint errors, built in 924ms (Code 0)
-```
-
----
-
-## 8. Summary of Release Conditions
-
-The application software is robust, defensively sound, and completely free of known authorization bypasses or unhandled failure states. 
-
-**Release is approved under the following operational condition:**
-1. **Cloud Storage Durability:** Production deployments that accept real user confidential files must attach a persistent volume (Render Disk, AWS EBS, or AWS S3) to `STORAGE_DIR`, as free-tier ephemeral filesystems do not persist data across container sleep cycles.
+1. **Activate Render Persistent Disk:**
+   In the Render Dashboard for `trustvault-api`:
+   - Upgrade plan from `Free` to `Starter` ($7/mo).
+   - Attach the disk configured in `render.yaml`:
+     * Name: `trustvault-storage-disk`
+     * Mount Path: `/data/vault_storage`
+     * Size: `10 GB`
+2. **Execute Live Production Persistence Test:**
+   Once the disk is mounted:
+   - Upload a unique document via Owner A on `https://trustvault-api-s6ba.onrender.com`.
+   - Trigger a manual restart in the Render Dashboard.
+   - Download the document via Owner A and confirm exact byte parity and SHA-256 checksum match.
+3. **Lift Release Block:**
+   Once persistent storage is confirmed across a live container restart, change release status to **APPROVED FOR PRODUCTION RELEASE**. Until then, do not upload real confidential documents to the live deployment.

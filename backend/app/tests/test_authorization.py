@@ -172,3 +172,31 @@ def test_storage_checksum_corruption_detection(client: TestClient, test_users, t
     dl_res = client.get(f"/api/v1/documents/{doc_id}/download", headers=headers_a)
     assert dl_res.status_code == 500
     assert "File integrity check failed" in dl_res.json()["detail"]
+
+def test_peer_owner_isolation_in_same_organization(client: TestClient, test_users):
+    """
+    Verifies that peer document owners in the same organization can view the sharing directory
+    but are strictly isolated from accessing each other's unshared documents.
+    """
+    headers_a = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
+    headers_b = get_auth_headers(client, "owner_b@test.com", "OwnerBPass123!")
+
+    # 1. Both owners can access the company user directory for document sharing
+    users_a = client.get("/api/v1/users", headers=headers_a).json()
+    users_b = client.get("/api/v1/users", headers=headers_b).json()
+    assert len(users_a) > 0
+    assert len(users_b) > 0
+
+    # 2. Owner A uploads private confidential document
+    doc_a = upload_sample_doc(client, headers_a, "Owner A Confidential Patent")
+    doc_a_id = doc_a["id"]
+
+    # 3. Peer Owner B is denied all access (returns 404 Not Found to prevent enumeration)
+    assert client.get(f"/api/v1/documents/{doc_a_id}", headers=headers_b).status_code == 404
+    assert client.get(f"/api/v1/documents/{doc_a_id}/download", headers=headers_b).status_code == 404
+    assert client.patch(f"/api/v1/documents/{doc_a_id}", headers=headers_b, json={"title": "Hacked"}).status_code == 404
+    assert client.delete(f"/api/v1/documents/{doc_a_id}", headers=headers_b).status_code == 404
+
+    # 4. Search isolation: Owner B cannot discover Owner A's document via search
+    search_res = client.get("/api/v1/documents?query=Patent", headers=headers_b).json()
+    assert search_res["total"] == 0
