@@ -159,7 +159,12 @@ export const api = {
       if (response.status === 404) {
         throw new ApiError('Document not found or access has been revoked.', 404);
       }
-      throw new ApiError('Failed to download document', response.status);
+      let errorMsg = 'Failed to download document';
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch (_) {}
+      throw new ApiError(errorMsg, response.status);
     }
 
     const blob = await response.blob();
@@ -185,7 +190,12 @@ export const api = {
       if (response.status === 404) {
         throw new ApiError('Document not found or access has been revoked.', 404);
       }
-      throw new ApiError('Failed to fetch document content for preview', response.status);
+      let errorMsg = 'Failed to fetch document content for preview';
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch (_) {}
+      throw new ApiError(errorMsg, response.status);
     }
 
     return response.blob();
