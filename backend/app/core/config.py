@@ -32,7 +32,13 @@ class Settings(BaseSettings):
         return v
     
     # Private Storage
+    STORAGE_BACKEND: str = "local"  # "local" or "s3"
     STORAGE_DIR: str = "./data/vault_storage"
+    S3_ENDPOINT_URL: Optional[str] = None  # Supabase, Cloudflare R2, or AWS S3 endpoint
+    S3_BUCKET_NAME: Optional[str] = None
+    S3_ACCESS_KEY_ID: Optional[str] = None
+    S3_SECRET_ACCESS_KEY: Optional[str] = None
+    S3_REGION_NAME: Optional[str] = "us-east-1"
     MAX_FILE_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB
     ALLOWED_EXTENSIONS: List[str] = [
         "pdf", "docx", "xlsx", "pptx", "txt", "csv", "json", "md", "png", "jpg", "jpeg"

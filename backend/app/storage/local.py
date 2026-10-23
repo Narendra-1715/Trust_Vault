@@ -100,7 +100,11 @@ class LocalPrivateStorage(BaseStorageAdapter):
                 hasher.update(chunk)
         return hasher.hexdigest()
 
-storage_service = LocalPrivateStorage()
+if settings.STORAGE_BACKEND == "s3" or (settings.S3_BUCKET_NAME and settings.S3_ACCESS_KEY_ID):
+    from app.storage.s3 import S3StorageAdapter
+    storage_service = S3StorageAdapter()
+else:
+    storage_service = LocalPrivateStorage()
 
 def sanitize_filename(filename: str) -> str:
     """
