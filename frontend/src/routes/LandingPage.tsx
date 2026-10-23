@@ -18,20 +18,19 @@ export const LandingPage: React.FC = () => {
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '0.625rem',
-            padding: '0.35rem 0.875rem',
+            gap: '0.5rem',
+            padding: '0.35rem 0.75rem',
             backgroundColor: '#ffffff',
             color: '#1d4ed8',
-            borderRadius: '20px',
+            borderRadius: 'var(--radius-sm)',
             fontSize: '0.75rem',
             fontWeight: 700,
             marginBottom: '1.75rem',
             border: '1px solid #bfdbfe',
-            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.08)',
+            boxShadow: '0 1px 3px rgba(37, 99, 235, 0.08)',
             letterSpacing: '0.04em',
             textTransform: 'uppercase'
           }}>
-            <span className="pulse-dot" style={{ backgroundColor: '#2563eb' }}></span>
             <Shield size={14} />
             <span>Zero-Trust Document Management Platform</span>
           </div>
@@ -241,11 +240,11 @@ export const LandingPage: React.FC = () => {
                 width: '42px',
                 height: '42px',
                 borderRadius: 'var(--radius-sm)',
-                backgroundColor: '#faf5ff',
+                backgroundColor: 'var(--accent-light)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#7e22ce',
+                color: 'var(--accent)',
                 marginBottom: '1.25rem'
               }}>
                 <Eye size={22} />

@@ -160,11 +160,11 @@ export const DocumentsPage: React.FC = () => {
             width: '38px',
             height: '38px',
             borderRadius: 'var(--radius-sm)',
-            backgroundColor: '#faf5ff',
+            backgroundColor: 'var(--bg-surface-secondary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#7e22ce',
+            color: 'var(--primary)',
             flexShrink: 0
           }}>
             <Lock size={20} />
@@ -175,7 +175,7 @@ export const DocumentsPage: React.FC = () => {
             </div>
             <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
               <span>Forensic DLP</span>
-              <span className="badge badge-gray" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', backgroundColor: '#f3e8ff', color: '#6b21a8' }}>Active</span>
+              <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Active</span>
             </div>
             <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
               Dynamic watermark tracking

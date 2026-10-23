@@ -430,7 +430,7 @@ export const AuditPage: React.FC = () => {
                         color: '#15803d',
                         backgroundColor: '#f0fdf4',
                         padding: '2px 8px',
-                        borderRadius: '12px',
+                        borderRadius: 'var(--radius-xs)',
                         border: '1px solid #bbf7d0',
                         fontWeight: 600
                       }}>
