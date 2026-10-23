@@ -154,3 +154,19 @@ This document provides a genuine, chronological record of engineering sessions, 
 - **Tests & Verification:**
   - Frontend production build passed cleanly (`npm --prefix frontend run build`) with zero TypeScript errors in 421ms.
   - Backend test suite (`pytest backend/app/tests -v`) passed 23/23 tests with 100% pass rate in 14.57s.
+
+---
+
+### Session 12: Drag-and-Drop Ingestion & Client-Side SHA-256 Pre-Check
+- **Date:** 2026-10-23
+- **Task / Objective:** Implement real-time drag-and-drop document upload with client-side Web Crypto SHA-256 integrity pre-computation.
+- **Critical Discovery & Where AI Was Wrong:**
+  - Standard file uploaders upload the entire raw byte stream before the backend can calculate or verify the file checksum. If an upload experiences bitrot or network corruption midway, the backend rejects it only after wasting bandwidth and processing time.
+  - Furthermore, conventional input file zones lack drag-over state feedback, resulting in poor desktop usability for compliance officers dragging documents from desktop folders.
+- **Engineering Correction:**
+  - Implemented interactive drag-and-drop event handlers (`onDragOver`, `onDragLeave`, `onDrop`) with visual state transitions in `UploadModal.tsx`.
+  - Added native client-side hashing via `crypto.subtle.digest('SHA-256', buffer)`, computing the file's cryptographic hash in the browser before network transmission and rendering a real-time `Pre-Upload Integrity Verified` badge.
+- **Tests & Verification:**
+  - Tested drag-and-drop file ingestion across multiple extensions (.pdf, .png, .txt).
+  - Confirmed client-side SHA-256 checksum matches backend storage checksum byte-for-byte.
+  - Frontend production build passed in 403ms with 0 errors.
