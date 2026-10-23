@@ -173,6 +173,24 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
+  fetchDocumentBlob: async (id: string): Promise<Blob> => {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE}/documents/${id}/download`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new ApiError('Document not found or access has been revoked.', 404);
+      }
+      throw new ApiError('Failed to fetch document content for preview', response.status);
+    }
+
+    return response.blob();
+  },
+
   updateDocumentMetadata: (id: string, data: { title?: string; description?: string; category?: string }) =>
     request<DocumentItem>(`/documents/${id}`, {
       method: 'PATCH',

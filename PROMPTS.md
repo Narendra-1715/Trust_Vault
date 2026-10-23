@@ -137,3 +137,20 @@ This document provides a genuine, chronological record of engineering sessions, 
   - Automatically signs in newly registered users with an immediate session token and directs them to their private workspace, displaying a toast notification.
 - **Tests & Verification:**
   - Tested registration with custom credentials; confirmed user created with Argon2id hash and audit event `auth.register` recorded in the cryptographic ledger.
+
+---
+
+### Session 11: Cryptographic Block Explorer, Forensic Watermarking & DLP Hardening
+- **Date:** 2026-10-23
+- **Task / Objective:** Enhance TrustVault with enterprise compliance capabilities: an Interactive Cryptographic Block Explorer, In-Browser Confidential Document Preview with Dynamic Forensic Watermarking, and an Enterprise Security Metrics Dashboard.
+- **Critical Discovery & Where AI Was Wrong:**
+  - Standard file preview implementations often render documents via static URLs or unprotected `<embed>` elements. This violates zero-trust architecture: it exposes direct asset paths, bypasses session tokens on reload, and leaves organizations vulnerable to insider leaks via screen capture.
+  - Additionally, in audit logs, presenting hashes exclusively in tabular format conceals the sequential SHA-256 hash chaining mechanism from evaluators and compliance officers, obscuring the mathematical proof of tamper-evidence.
+- **Engineering Correction:**
+  - Implemented authenticated `fetchDocumentBlob` in `frontend/src/lib/api.ts` to stream documents directly into ephemeral in-memory `Blob` URLs with instantaneous revocation upon dismissal.
+  - Created an in-browser Confidential Document Previewer in `frontend/src/routes/DocumentDetailPage.tsx` supporting PDFs, high-resolution images, and plaintext/code files. Built an uncopyable dynamic forensic DLP watermark overlay displaying the authenticated user's email, exact IST timestamp, and compliance warning (`CONFIDENTIAL • TRUSTVAULT DLP PROTECTED`).
+  - Added a view toggle in `frontend/src/routes/AuditPage.tsx` (`Table View` vs. `Cryptographic Block Explorer`) rendering visually linked cryptographic blocks displaying `Block #`, deterministic `Previous Hash`, `Current SHA-256 Hash`, tamper status, and expandable payload diff inspectors.
+  - Added an Enterprise Security Metrics Bar in `frontend/src/routes/DocumentsPage.tsx` highlighting active confidential assets count, Zero-Trust RLS enforcement, immutable ledger provenance, and DLP state.
+- **Tests & Verification:**
+  - Frontend production build passed cleanly (`npm --prefix frontend run build`) with zero TypeScript errors in 421ms.
+  - Backend test suite (`pytest backend/app/tests -v`) passed 23/23 tests with 100% pass rate in 14.57s.

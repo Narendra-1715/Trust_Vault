@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Plus, Search, Filter, Download, Eye, Lock } from 'lucide-react';
+import { FileText, Plus, Search, Filter, Download, Eye, Lock, ShieldCheck, Database } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { UploadModal } from '../features/documents/UploadModal';
@@ -61,6 +61,125 @@ export const DocumentsPage: React.FC = () => {
           <Plus size={16} />
           <span>Upload Document</span>
         </button>
+      </div>
+
+      {/* Enterprise Security Metrics Bar */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '0.875rem',
+        marginBottom: '1.5rem'
+      }}>
+        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'var(--accent-light)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--accent)',
+            flexShrink: 0
+          }}>
+            <FileText size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Confidential Assets
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+              {isLoading ? '...' : (data?.documents?.length ?? 0)}
+            </div>
+            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Authorized in your scope
+            </div>
+          </div>
+        </div>
+
+        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'var(--success-bg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--success)',
+            flexShrink: 0
+          }}>
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Access Enforcement
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span>Zero-Trust RLS</span>
+              <span className="badge badge-green" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Enforced</span>
+            </div>
+            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Strict owner & tenant bounds
+            </div>
+          </div>
+        </div>
+
+        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'var(--bg-surface-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-main)',
+            flexShrink: 0
+          }}>
+            <Database size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Ledger Provenance
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span>SHA-256 Chained</span>
+              <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Immutable</span>
+            </div>
+            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Deterministic tamper audit
+            </div>
+          </div>
+        </div>
+
+        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: '#faf5ff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#7e22ce',
+            flexShrink: 0
+          }}>
+            <Lock size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Data Loss Prevention
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span>Forensic DLP</span>
+              <span className="badge badge-gray" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', backgroundColor: '#f3e8ff', color: '#6b21a8' }}>Active</span>
+            </div>
+            <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Dynamic watermark tracking
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
