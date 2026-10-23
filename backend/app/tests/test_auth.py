@@ -47,3 +47,14 @@ def test_tampered_bearer_token_rejected(client: TestClient, test_users):
     tampered_headers = {"Authorization": headers["Authorization"] + "tampered"}
     response = client.get("/api/v1/auth/me", headers=tampered_headers)
     assert response.status_code == 401
+
+def test_admin_self_registration_rejected(client: TestClient):
+    """Verifies that an unauthenticated attacker cannot self-register with role 'admin'."""
+    response = client.post("/api/v1/auth/register", json={
+        "email": "attacker_admin@test.com",
+        "password": "AttackerPass123!",
+        "display_name": "Attacker Admin",
+        "role": "admin"
+    })
+    # Either 422 Unprocessable Entity (schema validation) or 403 Forbidden
+    assert response.status_code in [403, 422], f"Expected 403 or 422, got {response.status_code}: {response.text}"

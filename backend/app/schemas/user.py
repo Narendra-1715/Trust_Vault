@@ -18,7 +18,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     display_name: str = Field(..., min_length=2, max_length=100)
-    role: str = Field(default="owner", pattern="^(admin|owner|viewer)$")
+    role: str = Field(default="owner", pattern="^(owner|viewer)$")
 
 class UserUpdate(BaseModel):
     display_name: Optional[str] = Field(None, min_length=2, max_length=100)

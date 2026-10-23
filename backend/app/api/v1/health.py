@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.session import get_db
+from app.core.config import settings
 from app.storage.local import storage_service
 
 router = APIRouter()
@@ -22,7 +23,12 @@ def health_check(db: Session = Depends(get_db)):
     storage_healthy = os_storage_check()
 
     if db_healthy and storage_healthy:
-        return {"status": "healthy", "service": "TrustVault API", "version": "1.0.0"}
+        return {
+            "status": "healthy",
+            "service": "TrustVault API",
+            "version": settings.VERSION,
+            "commit_sha": settings.COMMIT_SHA
+        }
     else:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

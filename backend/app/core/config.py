@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TrustVault"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
+    COMMIT_SHA: str = os.getenv("RENDER_GIT_COMMIT", os.getenv("GIT_COMMIT", os.getenv("COMMIT_SHA", "local-dev")))
     
     # Environment
     ENVIRONMENT: str = "development"

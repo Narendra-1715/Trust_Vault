@@ -101,6 +101,12 @@ def register(
             detail="A user with this email address already exists."
         )
 
+    if user_in.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Self-registration as administrator is not permitted. Administrative accounts must be provisioned."
+        )
+
     new_user = User(
         email=normalized_email,
         password_hash=hash_password(user_in.password),
