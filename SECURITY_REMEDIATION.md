@@ -8,7 +8,7 @@ This document details all security vulnerabilities identified, remediated, and v
 
 | Defect ID | Severity | Vulnerability Description | Remediation Architecture | Responsible Component | Regression Test | Verification Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **REM-01** | **Critical** | Broken Object-Level Authorization (BOLA/IDOR) revealing document existence via 403 status codes. | Centralized authorization policy returns uniform `404 Not Found` for any document not owned or granted. | `backend/app/services/policy.py`, `documents.py` | `test_cross_user_read_isolation_returns_404`, `test_cross_user_download_isolation_returns_404` | **RESOLVED & VERIFIED** |
+| **REM-01** | **Critical** | Broken Object-Level Authorization (BOLA/IDOR) revealing document existence via 403 status codes. | Centralized authorization policy returns uniform `404 Not Found` for any document not owned or granted. | `backend/app/policies/authorization.py`, `documents.py` | `test_cross_user_read_isolation_returns_404`, `test_cross_user_download_isolation_returns_404` | **RESOLVED & VERIFIED** |
 | **REM-02** | **Critical** | Stale download links or token reuse post permission revocation. | Replaced static URLs with direct streaming endpoints verifying `revoked_at IS NULL` synchronously in the database transaction. | `backend/app/api/v1/documents.py`, `permissions.py` | `test_immediate_permission_revocation_lifecycle` | **RESOLVED & VERIFIED** |
 | **REM-03** | **Critical** | Malicious binary uploads and MIME type spoofing (e.g. executable disguised as PDF). | Implemented 512-byte magic-byte inspection against whitelist (`application/pdf`, `text/plain`, etc.) and isolated storage outside web root. | `backend/app/storage/local.py`, `documents.py` | `test_executable_upload_rejected`, `test_mime_magic_byte_spoofing_rejected` | **RESOLVED & VERIFIED** |
 | **REM-04** | **High** | Path traversal in filenames (e.g., `../../etc/shadow`). | Sanitized filenames using `os.path.basename` and persisted files under randomized UUID keys. | `backend/app/storage/local.py` | `test_filename_sanitization_strips_path_traversal` | **RESOLVED & VERIFIED** |
@@ -17,7 +17,7 @@ This document details all security vulnerabilities identified, remediated, and v
 | **REM-07** | **Medium** | Ephemeral container restart losing default seeded files on cloud hosting. | Added `_reseed_default_document_if_missing` self-healing check in `LocalPrivateStorage` to recreate sample document fixtures if absent. | `backend/app/storage/local.py` | `verify_e2e_journeys.py` (Step 2) | **RESOLVED & VERIFIED** |
 | **REM-08** | **Medium** | Audit ledger row tampering or deletion by insider without detection. | Implemented SHA-256 canonical JSON hash chaining (`previous_event_hash`) and integrity verification endpoint. | `backend/app/audit/service.py`, `audit/verifier.py` | `test_tampering_event_payload_detected`, `test_tampering_event_deletion_detected` | **RESOLVED & VERIFIED** |
 | **REM-09** | **Medium** | Credential stuffing and brute-force password guessing. | Enforced Argon2id memory-hard password hashing and in-memory sliding-window IP rate limiter (`10 attempts/min`). | `backend/app/core/security.py`, `core/rate_limit.py` | `test_invalid_password_rejected_with_generic_message` | **RESOLVED & VERIFIED** |
-| **REM-10** | **Low** | Authorized viewer offline document leakage via screen capture. | Embedded dynamic forensic watermarking in document preview displaying viewer email and IST timestamp. | `frontend/src/routes/DocumentDetailPage.tsx` | UI Preview Inspection | **RESOLVED & VERIFIED** |
+| **REM-10** | **Low** | Authorized viewer offline document leakage via screen capture or print. | Embedded dynamic forensic watermarking in document preview displaying viewer email and IST timestamp (deterrence and attribution; does not block OS grabbers). | `frontend/src/routes/DocumentDetailPage.tsx` | UI Preview Inspection | **RESOLVED & VERIFIED (With Scope Limitations)** |
 
 ---
 
@@ -25,7 +25,7 @@ This document details all security vulnerabilities identified, remediated, and v
 
 ### 2.1 Remediation of REM-01: BOLA / IDOR Prevention via Strict 404 Masking
 - **Vulnerability:** When a user attempted to access or download a document without permission, an application returning `403 Forbidden` leaks that the document exists and has a specific identifier.
-- **Implementation:** In `backend/app/services/policy.py`, `AuthorizationPolicy.can_read_document` and `can_modify_document` are evaluated. In `backend/app/api/v1/documents.py`:
+- **Implementation:** In `backend/app/policies/authorization.py`, `AuthorizationPolicy.can_read_document` and `can_modify_document` are evaluated. In `backend/app/api/v1/documents.py`:
   ```python
   if not policy.can_read_document(user=current_user, document=doc, db=db):
       log_audit_event(
