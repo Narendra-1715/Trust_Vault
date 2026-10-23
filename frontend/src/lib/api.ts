@@ -109,6 +109,13 @@ export const api = {
     return res;
   },
 
+  register: async (data: { email: string; password: string; display_name: string; role?: string }) => {
+    return request<User>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   getCurrentUser: () => request<User>('/auth/me'),
 
   // Users
