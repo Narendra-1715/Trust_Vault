@@ -100,9 +100,14 @@ class LocalPrivateStorage(BaseStorageAdapter):
                 hasher.update(chunk)
         return hasher.hexdigest()
 
-if settings.STORAGE_BACKEND == "s3" or (settings.S3_BUCKET_NAME and settings.S3_ACCESS_KEY_ID):
-    from app.storage.s3 import S3StorageAdapter
-    storage_service = S3StorageAdapter()
+if settings.STORAGE_BACKEND == "s3" and settings.S3_BUCKET_NAME:
+    try:
+        from app.storage.s3 import S3StorageAdapter
+        storage_service = S3StorageAdapter()
+        print(f"[TrustVault Storage] S3 storage adapter initialized for bucket: {settings.S3_BUCKET_NAME}")
+    except Exception as e:
+        print(f"[TrustVault Storage] S3 adapter initialization error ({e}). Falling back to LocalPrivateStorage.")
+        storage_service = LocalPrivateStorage()
 else:
     storage_service = LocalPrivateStorage()
 
