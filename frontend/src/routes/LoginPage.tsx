@@ -11,7 +11,6 @@ import {
   LogIn, 
   Eye, 
   EyeOff, 
-  KeyRound, 
   History, 
   ChevronDown, 
   ChevronUp,
@@ -36,7 +35,7 @@ export const LoginPage: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDemoOpen, setIsDemoOpen] = useState(true);
+  const [isDemoOpen, setIsDemoOpen] = useState(false);
 
   const { login, register } = useAuth();
   const { toast } = useToast();
@@ -91,57 +90,51 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      width: '100%',
-      backgroundColor: 'var(--bg-warm)',
-    }}>
-      {/* ================= LEFT COLUMN: GRAPHITE BRAND & VALUE PROP ================= */}
-      <div style={{
-        flex: '1.2',
-        minWidth: '320px',
-        backgroundColor: 'var(--graphite)',
-        color: '#F6F3F0',
-        padding: '3.5rem 4rem',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden',
-        borderRight: '1px solid var(--border-dark)',
-      }} className="login-left-column">
-        {/* Subtle Geometric Linework Background */}
+    <div className="login-container">
+      {/* ================= LEFT COLUMN: GRAPHITE BRAND & VALUE PROP (~55%) ================= */}
+      <div className="login-left-pane">
+        {/* Subtle, Custom Security-Inspired Geometric Pattern */}
         <svg 
           style={{
             position: 'absolute',
-            right: '-40px',
-            bottom: '10%',
-            width: '420px',
-            height: '420px',
+            inset: 0,
+            width: '100%',
+            height: '100%',
             opacity: 0.08,
             pointerEvents: 'none',
+            overflow: 'hidden',
           }}
-          viewBox="0 0 200 200" 
-          fill="none" 
+          viewBox="0 0 800 800"
+          preserveAspectRatio="xMidYMid slice"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <circle cx="100" cy="100" r="90" stroke="#D99A67" strokeWidth="1.5" strokeDasharray="4 4" />
-          <circle cx="100" cy="100" r="60" stroke="#FFFFFF" strokeWidth="1.2" />
-          <polygon points="100,20 180,100 100,180 20,100" stroke="#D99A67" strokeWidth="1.2" />
-          <line x1="20" y1="100" x2="180" y2="100" stroke="#FFFFFF" strokeWidth="1" />
-          <line x1="100" y1="20" x2="100" y2="180" stroke="#FFFFFF" strokeWidth="1" />
+          <defs>
+            <pattern id="securityGrid" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#FFFFFF" strokeWidth="0.6" strokeOpacity="0.4" />
+              <circle cx="48" cy="48" r="1.5" fill="#D99A67" fillOpacity="0.6" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#securityGrid)" />
+          {/* Concentric Security Perimeter Radii */}
+          <circle cx="560" cy="400" r="180" stroke="#D99A67" strokeWidth="1.2" strokeDasharray="6 6" fill="none" />
+          <circle cx="560" cy="400" r="280" stroke="#FFFFFF" strokeWidth="1" strokeOpacity="0.3" fill="none" />
+          <circle cx="560" cy="400" r="400" stroke="#D99A67" strokeWidth="1.2" strokeDasharray="12 8" fill="none" />
+          {/* Cryptographic Node Lattice Lines */}
+          <line x1="80" y1="160" x2="560" y2="400" stroke="#FFFFFF" strokeWidth="0.8" strokeOpacity="0.25" />
+          <line x1="160" y1="640" x2="560" y2="400" stroke="#FFFFFF" strokeWidth="0.8" strokeOpacity="0.25" />
+          <line x1="560" y1="400" x2="760" y2="120" stroke="#D99A67" strokeWidth="1" strokeOpacity="0.35" />
+          <polygon points="560,340 620,400 560,460 500,400" stroke="#D99A67" strokeWidth="1" fill="none" strokeOpacity="0.4" />
         </svg>
 
-        {/* Top Header & Brand Identity */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '2.5rem' }}>
+          {/* Top Header & Brand Identity */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div className="login-brand-header" style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '2.5rem' }}>
             <div style={{
               width: '42px',
               height: '42px',
               borderRadius: 'var(--radius-sm)',
               backgroundColor: 'var(--graphite-elevated)',
-              border: '1px solid var(--border-dark)',
+              border: '1px solid rgba(217, 154, 103, 0.35)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -161,48 +154,43 @@ export const LoginPage: React.FC = () => {
                   color: 'var(--copper)',
                   border: '1px solid var(--copper-border)',
                   backgroundColor: 'var(--copper-light)',
-                  padding: '0.125rem 0.375rem',
+                  padding: '0.125rem 0.4rem',
                   borderRadius: 'var(--radius-xs)',
-                  letterSpacing: '0.06em',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
                 }}>
                   CONFIDENTIAL CORE
                 </span>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '1px' }}>
-                Zero-Trust Document Security Platform
+                Enterprise Document Security &amp; Access Control
               </div>
             </div>
           </div>
 
           {/* Main Headline & Supporting Copy */}
-          <div style={{ maxWidth: '520px', marginTop: '1.5rem' }}>
-            <h1 style={{
-              fontSize: '2.375rem',
-              fontWeight: 700,
-              lineHeight: 1.2,
-              letterSpacing: '-0.03em',
-              color: '#FFFFFF',
-              marginBottom: '1rem',
-            }}>
+          <div style={{ maxWidth: '520px', marginTop: '1rem' }}>
+            <h1 className="login-left-headline">
               Confidentiality is not optional.
             </h1>
-            <p style={{
+            <p className="login-left-subtext" style={{
               fontSize: '0.9375rem',
               lineHeight: 1.6,
               color: '#D1CEC7',
               marginBottom: '2.5rem',
             }}>
-              Engineered for organizations sharing sensitive agreements, financial audits, and intellectual property. 
+              Purpose-built for organizations sharing sensitive agreements, financial disclosures, and intellectual property. 
               Access is evaluated server-side on every request, revokes in real-time, and is permanently accounted for.
             </p>
           </div>
 
-          {/* 3 Core Architectural Highlights */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '480px' }}>
+          {/* Two Compact Feature Highlights: Document Access Control and Audit Visibility */}
+          <div className="login-features-list" style={{ display: 'flex', flexDirection: 'column', gap: '1.375rem', maxWidth: '480px' }}>
+            {/* Feature 1: Document Access Control */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
               <div style={{
-                width: '34px',
-                height: '34px',
+                width: '36px',
+                height: '36px',
                 borderRadius: 'var(--radius-xs)',
                 backgroundColor: 'var(--graphite-elevated)',
                 border: '1px solid var(--border-dark)',
@@ -211,24 +199,25 @@ export const LoginPage: React.FC = () => {
                 justifyContent: 'center',
                 color: 'var(--copper)',
                 flexShrink: 0,
-                marginTop: '2px',
+                marginTop: '1px',
               }}>
                 <Lock size={17} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FFFFFF' }}>
-                  Server-Side Zero-Trust Enforcement
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FFFFFF', marginBottom: '2px' }}>
+                  Document Access Control
                 </div>
-                <div style={{ fontSize: '0.8125rem', color: '#9E9C96', lineHeight: 1.45, marginTop: '2px' }}>
-                  No static or pre-signed links. Permissions are evaluated in the active database transaction; unauthorized requests return uniform 404 to mask file existence.
+                <div style={{ fontSize: '0.8125rem', color: '#9E9C96', lineHeight: 1.5 }}>
+                  Granular read and edit permissions granted strictly to verified identities. Immediate revocation stops subsequent downloads and streams without delay.
                 </div>
               </div>
             </div>
 
+            {/* Feature 2: Audit Visibility */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
               <div style={{
-                width: '34px',
-                height: '34px',
+                width: '36px',
+                height: '36px',
                 borderRadius: 'var(--radius-xs)',
                 backgroundColor: 'var(--graphite-elevated)',
                 border: '1px solid var(--border-dark)',
@@ -237,42 +226,16 @@ export const LoginPage: React.FC = () => {
                 justifyContent: 'center',
                 color: 'var(--copper)',
                 flexShrink: 0,
-                marginTop: '2px',
-              }}>
-                <KeyRound size={17} strokeWidth={2} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FFFFFF' }}>
-                  Instant Access Revocation
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: '#9E9C96', lineHeight: 1.45, marginTop: '2px' }}>
-                  Taking access away takes effect immediately. Download and preview streams are verified live, cutting off subsequent requests without delay.
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-              <div style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: 'var(--radius-xs)',
-                backgroundColor: 'var(--graphite-elevated)',
-                border: '1px solid var(--border-dark)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--copper)',
-                flexShrink: 0,
-                marginTop: '2px',
+                marginTop: '1px',
               }}>
                 <History size={17} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FFFFFF' }}>
-                  Tamper-Evident SHA-256 Audit Ledger
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FFFFFF', marginBottom: '2px' }}>
+                  Audit Visibility
                 </div>
-                <div style={{ fontSize: '0.8125rem', color: '#9E9C96', lineHeight: 1.45, marginTop: '2px' }}>
-                  Every upload, download, grant, and refused attempt is cryptographically linked with canonical JSON hashing to detect alteration or deletion.
+                <div style={{ fontSize: '0.8125rem', color: '#9E9C96', lineHeight: 1.5 }}>
+                  A tamper-evident SHA-256 cryptographic hash chain records every download, edit, and denied attempt, providing incontrovertible proof of who accessed what.
                 </div>
               </div>
             </div>
@@ -280,49 +243,41 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Left Column Restrained Footer */}
-        <div style={{
-          marginTop: '3rem',
+        <div className="login-left-footer" style={{
+          position: 'relative',
+          zIndex: 1,
+          marginTop: '3.5rem',
           paddingTop: '1.5rem',
           borderTop: '1px solid var(--border-dark)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
           fontSize: '0.75rem',
           color: 'var(--text-muted)',
-          letterSpacing: '0.03em',
+          letterSpacing: '0.04em',
         }}>
-          <span>TRUSTVAULT ENTERPRISE DOCUMENT PLATFORM</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+          <span>TRUSTVAULT DOCUMENT SECURITY PLATFORM</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
             <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '6px', height: '6px' }}></span>
-            <span>SYSTEM ACTIVE</span>
+            <span style={{ color: '#D1CEC7' }}>SYSTEM ACTIVE</span>
           </span>
         </div>
       </div>
 
-      {/* ================= RIGHT COLUMN: AUTHENTICATION WORKSPACE ================= */}
-      <div style={{
-        flex: '1',
-        minWidth: '320px',
-        backgroundColor: 'var(--bg-warm)',
-        padding: '3rem 2.5rem',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <div style={{
-          width: '100%',
-          maxWidth: '430px',
-        }}>
-          {/* Form Header */}
+      {/* ================= RIGHT COLUMN: AUTHENTICATION WORKSPACE (~45%) ================= */}
+      <div className="login-right-pane">
+        <div className="login-form-wrapper">
+          {/* Header Typography */}
           <div style={{ marginBottom: '1.75rem' }}>
             <div style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
+              fontSize: '0.7rem',
+              fontWeight: 700,
               textTransform: 'uppercase',
               color: 'var(--copper-dark)',
-              letterSpacing: '0.06em',
-              marginBottom: '0.25rem',
+              letterSpacing: '0.08em',
+              marginBottom: '0.375rem',
             }}>
               Confidential Access Gateway
             </div>
@@ -330,78 +285,63 @@ export const LoginPage: React.FC = () => {
               fontSize: '1.625rem',
               fontWeight: 700,
               color: 'var(--text-primary)',
-              letterSpacing: '-0.02em',
+              letterSpacing: '-0.025em',
               margin: '0 0 0.375rem',
             }}>
-              {mode === 'signin' ? 'Sign in to TrustVault' : 'Create your account'}
+              {mode === 'signin' ? 'Sign in to TrustVault' : 'Create an account'}
             </h2>
             <p style={{
               fontSize: '0.875rem',
               color: 'var(--text-secondary)',
               margin: 0,
+              lineHeight: 1.45,
             }}>
               {mode === 'signin' 
                 ? "Access your organization's confidential workspace." 
-                : 'Register a secure confidential document identity.'}
+                : 'Register your identity for protected document management.'}
             </p>
           </div>
 
           {/* Mode Switcher Segmented Control */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '4px',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            gap: '3px',
             backgroundColor: '#EBE6E0',
-            padding: '4px',
+            padding: '3px',
             borderRadius: 'var(--radius-sm)',
             marginBottom: '1.5rem',
             border: '1px solid var(--border)',
           }}>
             <button
               type="button"
+              className="login-mode-btn"
               onClick={() => { setMode('signin'); setError(null); }}
               style={{
-                padding: '0.5rem',
-                fontSize: '0.8125rem',
                 fontWeight: mode === 'signin' ? 600 : 500,
                 color: mode === 'signin' ? 'var(--text-primary)' : 'var(--text-secondary)',
                 backgroundColor: mode === 'signin' ? 'var(--bg-surface)' : 'transparent',
-                border: mode === 'signin' ? '1px solid var(--border)' : 'none',
-                borderRadius: 'var(--radius-xs)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.375rem',
+                border: mode === 'signin' ? '1px solid var(--border)' : '1px solid transparent',
                 boxShadow: mode === 'signin' ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s ease',
               }}
             >
-              <LogIn size={14} color={mode === 'signin' ? 'var(--copper-dark)' : 'currentColor'} />
+              <LogIn size={13} color={mode === 'signin' ? 'var(--copper-dark)' : 'currentColor'} />
               <span>Sign In</span>
             </button>
 
             <button
               type="button"
+              className="login-mode-btn"
               onClick={() => { setMode('register'); setError(null); }}
               style={{
-                padding: '0.5rem',
-                fontSize: '0.8125rem',
                 fontWeight: mode === 'register' ? 600 : 500,
                 color: mode === 'register' ? 'var(--text-primary)' : 'var(--text-secondary)',
                 backgroundColor: mode === 'register' ? 'var(--bg-surface)' : 'transparent',
-                border: mode === 'register' ? '1px solid var(--border)' : 'none',
-                borderRadius: 'var(--radius-xs)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.375rem',
+                border: mode === 'register' ? '1px solid var(--border)' : '1px solid transparent',
                 boxShadow: mode === 'register' ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s ease',
               }}
             >
-              <UserPlus size={14} color={mode === 'register' ? 'var(--copper-dark)' : 'currentColor'} />
+              <UserPlus size={13} color={mode === 'register' ? 'var(--copper-dark)' : 'currentColor'} />
               <span>Create Account</span>
             </button>
           </div>
@@ -412,7 +352,7 @@ export const LoginPage: React.FC = () => {
               backgroundColor: 'var(--warning-bg)',
               color: 'var(--warning)',
               border: '1px solid var(--warning-border)',
-              padding: '0.75rem 1rem',
+              padding: '0.75rem 0.875rem',
               borderRadius: 'var(--radius-sm)',
               fontSize: '0.8125rem',
               marginBottom: '1.25rem',
@@ -420,7 +360,7 @@ export const LoginPage: React.FC = () => {
               alignItems: 'center',
               gap: '0.5rem',
             }}>
-              <AlertCircle size={16} />
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
               <span>Your session has expired. Please sign in again.</span>
             </div>
           )}
@@ -431,7 +371,7 @@ export const LoginPage: React.FC = () => {
               backgroundColor: 'var(--danger-bg)',
               color: 'var(--danger)',
               border: '1px solid var(--danger-border)',
-              padding: '0.75rem 1rem',
+              padding: '0.75rem 0.875rem',
               borderRadius: 'var(--radius-sm)',
               fontSize: '0.8125rem',
               marginBottom: '1.25rem',
@@ -439,38 +379,58 @@ export const LoginPage: React.FC = () => {
               alignItems: 'center',
               gap: '0.5rem',
             }}>
-              <ShieldAlert size={16} />
+              <ShieldAlert size={16} style={{ flexShrink: 0 }} />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Main Card */}
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '1.75rem',
-            boxShadow: 'var(--shadow-sm)',
-          }}>
+          {/* Direct, Uncluttered Form (No oversized card boundary) */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {mode === 'signin' ? (
               /* ================= SIGN IN FORM ================= */
-              <form onSubmit={handleLoginSubmit}>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="email">Work Email</label>
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.125rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    htmlFor="email" 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Work Email
+                  </label>
                   <input
                     id="email"
                     type="email"
                     className="input-field"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="user@trustvault.com"
+                    placeholder="name@organization.com"
                     required
-                    autoFocus
+                    style={{
+                      height: '40px',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: 'var(--border)',
+                    }}
                   />
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label" htmlFor="password">Password</label>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    htmlFor="password" 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Password
+                  </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       id="password"
@@ -480,14 +440,19 @@ export const LoginPage: React.FC = () => {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
                       required
-                      style={{ paddingRight: '2.5rem' }}
+                      style={{
+                        height: '40px',
+                        paddingRight: '2.5rem',
+                        backgroundColor: '#FFFFFF',
+                        borderColor: 'var(--border)',
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       style={{
                         position: 'absolute',
-                        right: '0.75rem',
+                        right: '0.625rem',
                         background: 'none',
                         border: 'none',
                         color: 'var(--text-muted)',
@@ -507,17 +472,12 @@ export const LoginPage: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '0.6875rem',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                  }}
+                  className="btn-login-submit"
                   disabled={isSubmitting}
+                  style={{ marginTop: '0.5rem' }}
                 >
                   {isSubmitting ? (
-                    <span>Authenticating session...</span>
+                    <span>Authenticating credentials...</span>
                   ) : (
                     <>
                       <Lock size={15} />
@@ -528,9 +488,20 @@ export const LoginPage: React.FC = () => {
               </form>
             ) : (
               /* ================= REGISTER FORM ================= */
-              <form onSubmit={handleRegisterSubmit}>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="regName">Full Name</label>
+              <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.125rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    htmlFor="regName" 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Full Name
+                  </label>
                   <input
                     id="regName"
                     type="text"
@@ -539,12 +510,27 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Sarah Connor"
                     required
-                    autoFocus
+                    style={{
+                      height: '40px',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: 'var(--border)',
+                    }}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="regEmail">Work Email</label>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    htmlFor="regEmail" 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Work Email
+                  </label>
                   <input
                     id="regEmail"
                     type="email"
@@ -553,11 +539,27 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="sarah@organization.com"
                     required
+                    style={{
+                      height: '40px',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: 'var(--border)',
+                    }}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="regPassword">Password</label>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    htmlFor="regPassword" 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Password
+                  </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       id="regPassword"
@@ -568,14 +570,19 @@ export const LoginPage: React.FC = () => {
                       placeholder="At least 8 characters"
                       required
                       minLength={8}
-                      style={{ paddingRight: '2.5rem' }}
+                      style={{
+                        height: '40px',
+                        paddingRight: '2.5rem',
+                        backgroundColor: '#FFFFFF',
+                        borderColor: 'var(--border)',
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowRegPassword(!showRegPassword)}
                       style={{
                         position: 'absolute',
-                        right: '0.75rem',
+                        right: '0.625rem',
                         background: 'none',
                         border: 'none',
                         color: 'var(--text-muted)',
@@ -591,21 +598,28 @@ export const LoginPage: React.FC = () => {
                       {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                    Hashed with Argon2id memory-hard algorithm.
-                  </span>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label">Initial Workspace Scope</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '0.25rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label 
+                    style={{ 
+                      display: 'block', 
+                      fontSize: '0.8125rem', 
+                      fontWeight: 600, 
+                      color: 'var(--text-primary)', 
+                      marginBottom: '0.375rem' 
+                    }}
+                  >
+                    Initial Workspace Role
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     <label style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
                       padding: '0.5rem 0.75rem',
                       border: `1px solid ${regRole === 'owner' ? 'var(--copper)' : 'var(--border)'}`,
-                      backgroundColor: regRole === 'owner' ? 'var(--copper-light)' : 'var(--bg-surface)',
+                      backgroundColor: regRole === 'owner' ? 'var(--copper-light)' : '#FFFFFF',
                       borderRadius: 'var(--radius-sm)',
                       cursor: 'pointer',
                       fontSize: '0.8125rem',
@@ -630,7 +644,7 @@ export const LoginPage: React.FC = () => {
                       gap: '8px',
                       padding: '0.5rem 0.75rem',
                       border: `1px solid ${regRole === 'viewer' ? 'var(--copper)' : 'var(--border)'}`,
-                      backgroundColor: regRole === 'viewer' ? 'var(--copper-light)' : 'var(--bg-surface)',
+                      backgroundColor: regRole === 'viewer' ? 'var(--copper-light)' : '#FFFFFF',
                       borderRadius: 'var(--radius-sm)',
                       cursor: 'pointer',
                       fontSize: '0.8125rem',
@@ -653,14 +667,9 @@ export const LoginPage: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '0.6875rem',
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                  }}
+                  className="btn-login-submit"
                   disabled={isSubmitting}
+                  style={{ marginTop: '0.5rem' }}
                 >
                   {isSubmitting ? (
                     <span>Registering identity...</span>
@@ -674,31 +683,29 @@ export const LoginPage: React.FC = () => {
               </form>
             )}
 
-            {/* Subtle Security Assurance Statement */}
+            {/* Subtle Security Assurance Statement (Without unsupported claims) */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
               marginTop: '1.25rem',
-              paddingTop: '1rem',
-              borderTop: '1px solid var(--border-subtle)',
               fontSize: '0.75rem',
-              color: 'var(--text-muted)',
+              color: 'var(--text-secondary)',
               lineHeight: 1.4,
             }}>
               <FileCheck2 size={15} color="var(--copper-dark)" style={{ flexShrink: 0 }} />
               <span>
-                Protected by server-side zero-trust authorization. Role parameters and permissions are verified in the database transaction.
+                Protected by server-side zero-trust authorization. Role parameters and permissions are evaluated live in the active database transaction.
               </span>
             </div>
           </div>
 
-          {/* ================= EVALUATOR DEMO ACCESS (COLLAPSIBLE) ================= */}
+          {/* ================= EVALUATOR DEMO ACCESS (COMPACT COLLAPSIBLE) ================= */}
           <div style={{
-            marginTop: '1.25rem',
+            marginTop: '1.5rem',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--bg-surface)',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: '#FFFFFF',
             overflow: 'hidden',
             boxShadow: 'var(--shadow-sm)',
           }}>
@@ -707,7 +714,7 @@ export const LoginPage: React.FC = () => {
               onClick={() => setIsDemoOpen(!isDemoOpen)}
               style={{
                 width: '100%',
-                padding: '0.75rem 1rem',
+                padding: '0.625rem 0.875rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -715,37 +722,40 @@ export const LoginPage: React.FC = () => {
                 borderBottom: isDemoOpen ? '1px solid var(--border)' : 'none',
                 cursor: 'pointer',
                 textAlign: 'left',
+                transition: 'background-color 0.15s ease',
               }}
+              aria-expanded={isDemoOpen}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <UserCheck size={16} color="var(--copper-dark)" />
+                <UserCheck size={15} color="var(--copper-dark)" />
                 <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                   Evaluator demo access
                 </span>
                 <span style={{
-                  fontSize: '0.65rem',
+                  fontSize: '0.625rem',
                   fontWeight: 600,
                   backgroundColor: 'var(--bg-surface-tertiary)',
                   color: 'var(--text-secondary)',
-                  padding: '0.1rem 0.4rem',
+                  padding: '0.1rem 0.35rem',
                   borderRadius: 'var(--radius-xs)',
                   textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
                 }}>
                   Pre-seeded
                 </span>
               </div>
               <div style={{ color: 'var(--text-muted)' }}>
-                {isDemoOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                {isDemoOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </div>
             </button>
 
             {isDemoOpen && (
-              <div style={{ padding: '0.875rem' }}>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+              <div style={{ padding: '0.75rem 0.875rem' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.625rem', lineHeight: 1.4 }}>
                   Select an evaluation persona to populate credentials and test role boundaries:
                 </p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                   {/* Persona 1: Alice Owner A */}
                   <button
                     type="button"
@@ -753,8 +763,9 @@ export const LoginPage: React.FC = () => {
                     style={{
                       justifyContent: 'space-between',
                       width: '100%',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.45rem 0.625rem',
                       textAlign: 'left',
+                      borderColor: 'var(--border)',
                     }}
                     onClick={() => handleSelectDemoUser('owner_a@trustvault.com', 'OwnerAPass123!')}
                   >
@@ -762,7 +773,7 @@ export const LoginPage: React.FC = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Alice (Document Owner A)</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>owner_a@trustvault.com</div>
                     </div>
-                    <span className="badge badge-green">Owner</span>
+                    <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>Owner</span>
                   </button>
 
                   {/* Persona 2: Bob Owner B */}
@@ -772,8 +783,9 @@ export const LoginPage: React.FC = () => {
                     style={{
                       justifyContent: 'space-between',
                       width: '100%',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.45rem 0.625rem',
                       textAlign: 'left',
+                      borderColor: 'var(--border)',
                     }}
                     onClick={() => handleSelectDemoUser('owner_b@trustvault.com', 'OwnerBPass123!')}
                   >
@@ -781,7 +793,7 @@ export const LoginPage: React.FC = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Bob (Document Owner B)</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>owner_b@trustvault.com</div>
                     </div>
-                    <span className="badge badge-green">Owner</span>
+                    <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>Owner</span>
                   </button>
 
                   {/* Persona 3: Carol Viewer */}
@@ -791,8 +803,9 @@ export const LoginPage: React.FC = () => {
                     style={{
                       justifyContent: 'space-between',
                       width: '100%',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.45rem 0.625rem',
                       textAlign: 'left',
+                      borderColor: 'var(--border)',
                     }}
                     onClick={() => handleSelectDemoUser('viewer_a@trustvault.com', 'ViewerAPass123!')}
                   >
@@ -800,7 +813,7 @@ export const LoginPage: React.FC = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Carol (Restricted Viewer)</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>viewer_a@trustvault.com</div>
                     </div>
-                    <span className="badge badge-gray">Viewer</span>
+                    <span className="badge badge-gray" style={{ fontSize: '0.7rem' }}>Viewer</span>
                   </button>
 
                   {/* Persona 4: Admin */}
@@ -810,8 +823,9 @@ export const LoginPage: React.FC = () => {
                     style={{
                       justifyContent: 'space-between',
                       width: '100%',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.45rem 0.625rem',
                       textAlign: 'left',
+                      borderColor: 'var(--border)',
                     }}
                     onClick={() => handleSelectDemoUser('admin@trustvault.com', 'AdminPass123!')}
                   >
@@ -819,7 +833,7 @@ export const LoginPage: React.FC = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Security Administrator</div>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>admin@trustvault.com</div>
                     </div>
-                    <span className="badge badge-copper">Admin</span>
+                    <span className="badge badge-copper" style={{ fontSize: '0.7rem' }}>Admin</span>
                   </button>
                 </div>
               </div>
@@ -828,7 +842,7 @@ export const LoginPage: React.FC = () => {
 
           {/* Right Column Footer Links */}
           <div style={{
-            marginTop: '1.5rem',
+            marginTop: '1.75rem',
             textAlign: 'center',
             fontSize: '0.75rem',
             color: 'var(--text-muted)',
