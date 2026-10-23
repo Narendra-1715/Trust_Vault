@@ -25,15 +25,16 @@ def seed_database():
     3. Owner B: owner_b@trustvault.com / OwnerBPass123!
     4. Viewer A: viewer_a@trustvault.com / ViewerAPass123!
     """
+    from app.core.config import settings
+    if settings.ENVIRONMENT == "production" and not getattr(settings, "SEED_DEMO_DATA", False):
+        print("[TrustVault Seeder] Production environment detected and SEED_DEMO_DATA is False. Skipping demo fixtures.")
+        return
+
     print("[TrustVault Seeder] Initializing database...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
     try:
-        from app.core.config import settings
-        if settings.ENVIRONMENT == "production" and not getattr(settings, "SEED_DEMO_DATA", False):
-            print("[TrustVault Seeder] Production environment detected and SEED_DEMO_DATA is False. Skipping demo fixtures.")
-            return
 
         # Check if users already seeded
         existing_admin = db.query(User).filter(User.email == "admin@trustvault.com").first()
