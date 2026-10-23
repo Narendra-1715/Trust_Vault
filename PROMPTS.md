@@ -82,3 +82,58 @@ This document provides a genuine, chronological record of engineering sessions, 
   - Added an autouse pytest fixture `reset_rate_limiters` in `conftest.py` to reset in-memory sliding window counters between test iterations.
 - **Tests & Verification:**
   - All 23 security tests in pytest passed with zero failures in 12.30s.
+
+---
+
+### Session 7: Cloud Deployment on Render & PostgreSQL Protocol Normalization
+- **Date:** 2026-10-22
+- **Task / Objective:** Deploy production infrastructure on Render using declarative `render.yaml` Blueprint (Managed PostgreSQL, FastAPI Web Service, Static Site).
+- **Critical Discovery & Where AI Was Wrong:**
+  - The AI initially assumed passing Render's `property: connectionString` into `DATABASE_URL` would connect directly with SQLAlchemy 2.0. However, Render PostgreSQL URLs start with `postgres://`, which raises `sqlalchemy.exc.NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres`.
+  - Furthermore, Render passed `BACKEND_CORS_ORIGINS: "*"`. Because Pydantic's `BaseSettings` typed this field as `List[str]`, Pydantic called `json.loads('*')` on startup, crashing with a fatal `JSONDecodeError`.
+- **Engineering Correction:**
+  - Added `@field_validator("DATABASE_URL", mode="before")` across `Settings`, `session.py`, and `alembic/env.py` to automatically normalize `postgres://` or `postgresql://` into `postgresql+psycopg://`.
+  - Added `psycopg2-binary>=2.9.9` alongside `psycopg[binary]==3.3.6` for total dialect coverage.
+  - Retyped `BACKEND_CORS_ORIGINS` to `Union[str, List[str]]` with a safe parsing property supporting comma-separated strings, wildcard `*`, or JSON arrays.
+- **Tests & Verification:**
+  - Render Blueprint provisioned PostgreSQL `trustvault-postgres` and deployed backend web service `trustvault-api` successfully.
+
+---
+
+### Session 8: Internal Container Hostname vs. Public Browser Resolution
+- **Date:** 2026-10-22
+- **Task / Objective:** Connect the browser frontend static site to the deployed cloud backend API.
+- **Critical Discovery & Where AI Was Wrong:**
+  - In `render.yaml`, referencing `fromService: type: web, name: trustvault-api, property: host` provided Render's **internal private virtual network hostname** (e.g. `trustvault-api-s6ba`).
+  - Because static React sites run in the client's public browser (not inside Render's internal network), the browser attempted `POST https://trustvault-api-s6ba/api/v1/auth/login` and failed with `net::ERR_NAME_NOT_RESOLVED`.
+- **Engineering Correction:**
+  - Updated `frontend/src/lib/api.ts` with a resilient URL resolver that detects cloud-internal hostnames without a domain dot and automatically appends `.onrender.com`, resolving cleanly to `https://trustvault-api-s6ba.onrender.com`.
+- **Tests & Verification:**
+  - Verified live login in browser across all roles with instant Argon2id token issuance.
+
+---
+
+### Session 9: Cross-Platform Path Sanitization & Toast UX Overhaul
+- **Date:** 2026-10-22
+- **Task / Objective:** Ensure automated test suite passes on both Windows and Linux CI runners, and eliminate jarring browser alert modals.
+- **Critical Discovery & Where AI Was Wrong:**
+  - `test_filename_sanitization_strips_path_traversal` passed locally on Windows, but failed on Ubuntu Linux runner in GitHub Actions:
+    `assert '..' not in '....windowssystem32calc.exe'`
+  - **Root Cause:** `os.path.basename("..\\..\\windows\\system32\\calc.exe")` treats backslashes as path separators on Windows, but as literal filename characters on Linux!
+- **Engineering Correction:**
+  - Updated `sanitize_filename` in `app/storage/local.py` to normalize backslashes to forward slashes (`filename.replace('\\', '/')`) before calling `os.path.basename`, and explicitly stripped repeated dots (`re.sub(r'\.{2,}', '', clean)`).
+  - Replaced browser `alert()` popups across the entire frontend with an Antigravity-style floating bottom-right Toast Notification system with green checkmark animations and auto-dismissal.
+- **Tests & Verification:**
+  - GitHub Actions CI (Run #39674499447) passed 100% green on both `Backend Migrations & Security Tests` and `Frontend Typecheck & Build`.
+
+---
+
+### Session 10: Self-Service User Registration & Lifecycle Expansion
+- **Date:** 2026-10-23
+- **Task / Objective:** Implement complete self-service account registration on the login page while preserving one-click evaluator demo roles.
+- **Architectural Decision:**
+  - Added a clean segmented tab toggle (`[ Sign In ]` / `[ Create Account ]`) on the login screen.
+  - Wired the existing Argon2id-encrypted `/api/v1/auth/register` endpoint to the frontend.
+  - Automatically signs in newly registered users with an immediate session token and directs them to their private workspace, displaying a toast notification.
+- **Tests & Verification:**
+  - Tested registration with custom credentials; confirmed user created with Argon2id hash and audit event `auth.register` recorded in the cryptographic ledger.
