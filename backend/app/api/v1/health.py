@@ -21,13 +21,15 @@ def health_check(db: Session = Depends(get_db)):
         db_healthy = False
 
     storage_healthy = os_storage_check()
+    storage_backend_name = "s3" if hasattr(storage_service, "bucket") else "local"
 
     if db_healthy and storage_healthy:
         return {
             "status": "healthy",
             "service": "TrustVault API",
             "version": settings.VERSION,
-            "commit_sha": settings.COMMIT_SHA
+            "commit_sha": settings.COMMIT_SHA,
+            "storage_backend": storage_backend_name
         }
     else:
         return JSONResponse(
