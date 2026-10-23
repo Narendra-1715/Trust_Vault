@@ -162,7 +162,7 @@ This document maps all non-negotiable security requirements, enterprise controls
 |---|---|---|---|---|
 | **REL-01** | Clean repository clone instructions | Documented step-by-step in `README.md` | Verified local setup | **VERIFIED PASS** |
 | **REL-02** | Configure environment variables | Documented in `README.md` with `.env.example` | Verified startup commands | **VERIFIED PASS** |
-| **REL-03** | Full backend test suite | Automated pytest test suite | **23 passed, 0 failed in 13.9s** | **VERIFIED PASS** |
+| **REL-03** | Full backend test suite | Automated pytest test suite | **35 passed, 0 failed in 18.17s (100%)** | **VERIFIED PASS** |
 | **REL-04** | Frontend typecheck | `npx tsc -b` | **0 TypeScript errors** | **VERIFIED PASS** |
 | **REL-05** | Production frontend build | `npm run build` via Vite | **Built in 412ms without errors** | **VERIFIED PASS** |
 | **REL-06** | Inspect THREATS.md | Comprehensive threat matrix, STRIDE analysis, mitigations | Documented in `THREATS.md` | **VERIFIED PASS** |
@@ -188,4 +188,4 @@ This document maps all non-negotiable security requirements, enterprise controls
 | **E2E-07** | Inspect audit log | Navigate to `/audit` (Table or Block Explorer view) | Grant, download, and revocation events clearly visible | **VERIFIED PASS** |
 | **E2E-08** | Request AI recommendation and reject it | Click "AI Access Advisor" -> Reject recommendation | Rejection logged; zero unauthorized grants created | **VERIFIED PASS** |
 | **E2E-09** | Run audit-integrity verification | Click "Verify Ledger Integrity" on `/audit` | `100% Valid` cryptographically confirmed; SHA-256 intact | **VERIFIED PASS** |
-| **E2E-10** | Run automated security suite | Execute `pytest -v` | All 23 security tests pass 100% | **VERIFIED PASS** |
+| **E2E-10** | Run automated security suite | Execute `pytest -v` | All 35 security tests pass 100% | **VERIFIED PASS** |

@@ -244,7 +244,7 @@ All endpoints are versioned under `/api/v1` and document security schemas in Ope
 
 ## 8. Automated Security Test Suite
 
-The platform includes 23 integration and security test cases executed against isolated test databases and private storage instances.
+The platform includes 35 comprehensive integration, security, and fail-safe test cases executed against isolated test databases and private storage instances.
 
 ```bash
 cd backend
@@ -258,8 +258,10 @@ python -m pytest -v
 | **Authentication** | `test_unauthenticated_request_rejected` | Protected endpoints return 401 without bearer token | `PASSED` |
 | | `test_valid_login_success` | Argon2id verification succeeds; issues valid JWT | `PASSED` |
 | | `test_invalid_password_rejected_with_generic_message` | Rejection details prevent username enumeration | `PASSED` |
+| | `test_nonexistent_user_rejected_with_generic_message` | Non-existent accounts receive generic rejection message | `PASSED` |
 | | `test_disabled_user_login_prevented` | Inactive accounts receive 403 Forbidden | `PASSED` |
-| | `test_tampered_bearer_token_rejected` | Modified JWT signatures return 401 | `PASSED` |
+| | `test_tampered_bearer_token_rejected` | Modified JWT signatures return 401 Unauthorized | `PASSED` |
+| | `test_admin_self_registration_rejected` | Registration payload requesting admin role is rejected (422) | `PASSED` |
 | **Authorization** | `test_cross_user_read_isolation_returns_404` | Owner A cannot read Owner B's document (returns 404) | `PASSED` |
 | | `test_cross_user_download_isolation_returns_404` | Owner A cannot download Owner B's file (returns 404) | `PASSED` |
 | | `test_cross_user_edit_denied` | Metadata edit attempts on unowned documents return 404 | `PASSED` |
@@ -267,11 +269,22 @@ python -m pytest -v
 | | `test_viewer_with_read_access_cannot_edit` | Viewers with `read` permission cannot edit (returns 403) | `PASSED` |
 | | `test_viewer_cannot_grant_permissions` | Viewers cannot grant permissions to third parties (403) | `PASSED` |
 | | `test_search_never_reveals_unauthorized_documents` | Search queries exclude inaccessible documents | `PASSED` |
+| | `test_viewer_cannot_enumerate_users` | Viewers receive 403 when attempting to access user directory | `PASSED` |
+| | `test_owner_gets_minimal_user_directory` | Owners receive minimal directory attributes without role leakage | `PASSED` |
+| | `test_admin_only_users_all_endpoint` | Only admins can view complete internal user directory | `PASSED` |
+| | `test_peer_owner_isolation_in_same_organization` | Lateral isolation prevents peer owners from accessing each other | `PASSED` |
 | **Revocation** | `test_immediate_permission_revocation_lifecycle` | Revocation immediately denies the next request (404) | `PASSED` |
-| **Storage Security** | `test_executable_upload_rejected` | Executable file extensions are rejected (400) | `PASSED` |
+| **Storage & Fail-Safe** | `test_s3_storage_adapter_save_read_delete` | S3-compatible private storage save, read, and delete verify | `PASSED` |
+| | `test_s3_storage_fails_fast_without_silent_fallback` | Missing S3 config raises fast RuntimeError (no split-brain) | `PASSED` |
+| | `test_invalid_storage_backend_rejected` | Unrecognized storage backends raise immediate RuntimeError | `PASSED` |
+| | `test_local_storage_backend_selected` | Explicit local backend activates LocalPrivateStorage safely | `PASSED` |
+| | `test_health_reports_storage_backend_and_dependencies` | /health exposes backend type and dependency reachability | `PASSED` |
+| | `test_storage_checksum_corruption_detection` | Pre-stream SHA-256 validation catches disk corruption (500) | `PASSED` |
+| | `test_executable_upload_rejected` | Executable file extensions are rejected (400) | `PASSED` |
 | | `test_mime_magic_byte_spoofing_rejected` | Spoofed extensions without magic bytes are rejected (400) | `PASSED` |
 | | `test_filename_sanitization_strips_path_traversal` | Relative directory paths and null bytes are sanitized | `PASSED` |
 | | `test_document_deletion_removes_private_file` | Deleting document removes binary from private storage | `PASSED` |
+| | `test_missing_storage_file_fails_safely_without_silent_fabrication` | Missing storage file returns 500 without dummy data fabrication | `PASSED` |
 | **Audit Integrity** | `test_audit_event_generation_and_valid_hash_chain` | Chained SHA-256 events pass full verification | `PASSED` |
 | | `test_tampering_event_payload_detected` | Payload alteration causes hash mismatch detection | `PASSED` |
 | | `test_tampering_event_deletion_detected` | Deleting a record triggers a chain-break detection | `PASSED` |
@@ -279,7 +292,7 @@ python -m pytest -v
 | | `test_ai_recommendation_rejection_leaves_no_grants` | Rejecting AI recommendations creates zero grants | `PASSED` |
 
 ```text
-======================= 23 passed in 13.66s =======================
+======================= 35 passed, 2 warnings in 18.17s =======================
 ```
 
 ---
