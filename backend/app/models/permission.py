@@ -15,6 +15,7 @@ class DocumentPermission(Base):
     granted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     revoked_at = Column(DateTime, nullable=True, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
 
     # Relationships
     document = relationship("Document", back_populates="permissions")
@@ -23,4 +24,5 @@ class DocumentPermission(Base):
 
     __table_args__ = (
         Index("ix_doc_user_revoked", "document_id", "user_id", "revoked_at"),
+        Index("ix_doc_user_revoked_expires", "document_id", "user_id", "revoked_at", "expires_at"),
     )

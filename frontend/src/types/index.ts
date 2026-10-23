@@ -49,6 +49,9 @@ export interface DocumentPermission {
   granted_at: string;
   updated_at: string;
   revoked_at?: string;
+  expires_at?: string;
+  is_expired?: boolean;
+  status?: 'active' | 'expired' | 'revoked';
 }
 
 export interface AuditEvent {
@@ -92,4 +95,30 @@ export interface AIRecommendationResult {
   is_mock: boolean;
   explanation: string;
   suggestions: SuggestedGrant[];
+}
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  ip_address?: string;
+  user_agent?: string;
+  device_info?: string;
+  created_at: string;
+  last_active_at: string;
+  expires_at: string;
+  is_current: boolean;
+  is_active: boolean;
+}
+
+export interface SecurityAlert {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  event_type: string;
+  resource_id?: string;
+  created_at: string;
+  read_at?: string;
+  is_read: boolean;
 }

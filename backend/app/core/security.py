@@ -25,7 +25,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
 
-def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    subject: Union[str, Any],
+    role: str,
+    expires_delta: Optional[timedelta] = None,
+    jti: Optional[str] = None
+) -> str:
     """Generates a signed JWT access token."""
     now = datetime.now(timezone.utc)
     if expires_delta:
@@ -39,6 +44,9 @@ def create_access_token(subject: Union[str, Any], role: str, expires_delta: Opti
         "iat": now,
         "exp": expire,
     }
+    if jti:
+        to_encode["jti"] = str(jti)
+        
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 

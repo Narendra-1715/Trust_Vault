@@ -11,7 +11,9 @@ import {
   ChevronDown, 
   ChevronRight, 
   ShieldCheck, 
-  Clock
+  Clock,
+  Download,
+  Calendar
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -23,6 +25,9 @@ export const AuditPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'table' | 'chain'>('table');
   const [actionFilter, setActionFilter] = useState('');
   const [outcomeFilter, setOutcomeFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   const [verificationReport, setVerificationReport] = useState<AuditVerificationReport | null>(null);
   const [expandedPayloadId, setExpandedPayloadId] = useState<string | null>(null);
 
@@ -51,6 +56,24 @@ export const AuditPage: React.FC = () => {
       toast.error(err.message || 'Verification failed');
     }
   });
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setIsExporting(true);
+    try {
+      await api.exportAuditLog({
+        format,
+        action: actionFilter || undefined,
+        outcome: outcomeFilter || undefined,
+        date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+        date_to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
+      });
+      toast.success(`Audit log exported as ${format.toUpperCase()}.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="container">
@@ -93,15 +116,42 @@ export const AuditPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          className="btn btn-primary"
-          onClick={() => verifyMutation.mutate()}
-          disabled={verifyMutation.isPending}
-          style={{ padding: '0.5625rem 1rem' }}
-        >
-          <RefreshCw size={15} color="var(--copper)" className={verifyMutation.isPending ? 'spin' : ''} />
-          <span>{verifyMutation.isPending ? 'Verifying Hash Chain...' : 'Verify Ledger Integrity'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'inline-flex', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleExport('csv')}
+              disabled={isExporting}
+              style={{ gap: '0.375rem', borderRadius: 0, border: 'none', borderRight: '1px solid var(--border)' }}
+              title="Export sanitized CSV log (DDE formula injection protected)"
+            >
+              <Download size={13} color="var(--copper-dark)" />
+              <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleExport('json')}
+              disabled={isExporting}
+              style={{ gap: '0.375rem', borderRadius: 0, border: 'none' }}
+              title="Export raw JSON log"
+            >
+              <Download size={13} color="var(--copper-dark)" />
+              <span>JSON</span>
+            </button>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            onClick={() => verifyMutation.mutate()}
+            disabled={verifyMutation.isPending}
+            style={{ padding: '0.5625rem 1rem' }}
+          >
+            <RefreshCw size={15} color="var(--copper)" className={verifyMutation.isPending ? 'spin' : ''} />
+            <span>{verifyMutation.isPending ? 'Verifying Hash Chain...' : 'Verify Ledger Integrity'}</span>
+          </button>
+        </div>
       </div>
 
       {/* ================= CRYPTOGRAPHIC VERIFICATION BANNER ================= */}
@@ -160,14 +210,35 @@ export const AuditPage: React.FC = () => {
               </select>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '180px' }}>
               <input
                 type="text"
                 className="input-field"
-                placeholder="Filter by action (e.g. document.download, permission.revoke)..."
+                placeholder="Filter by action (e.g. document.download)..."
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
                 style={{ padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <Calendar size={13} />
+              <input
+                type="date"
+                className="input-field"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', width: '130px' }}
+                title="Events From"
+              />
+              <span>to</span>
+              <input
+                type="date"
+                className="input-field"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', width: '130px' }}
+                title="Events To"
               />
             </div>
           </div>

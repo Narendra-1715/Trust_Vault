@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.user import User
@@ -14,14 +15,27 @@ class AuthorizationPolicy:
     @staticmethod
     def get_active_permission(db: Session, document_id: str, user_id: str) -> Optional[DocumentPermission]:
         """
-        Retrieves active (non-revoked) permission for a user on a given document.
+        Retrieves active (non-revoked, non-expired) permission for a user on a given document.
         Always queries live database state within current transaction.
         """
-        return db.query(DocumentPermission).filter(
+        now_utc = datetime.now(timezone.utc)
+        perm = db.query(DocumentPermission).filter(
             DocumentPermission.document_id == document_id,
             DocumentPermission.user_id == user_id,
             DocumentPermission.revoked_at.is_(None)
         ).first()
+
+        if not perm:
+            return None
+
+        if perm.expires_at is not None:
+            exp = perm.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp <= now_utc:
+                return None
+
+        return perm
 
     @classmethod
     def can_read_document(cls, db: Session, user: User, document: Document) -> bool:

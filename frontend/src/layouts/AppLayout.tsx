@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
-import { Shield, FileText, Activity, Users, LogOut, Lock } from 'lucide-react';
+import { Shield, FileText, Activity, Users, LogOut, Lock, Laptop } from 'lucide-react';
+import { SessionManagementModal } from '../features/auth/SessionManagementModal';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 
 export const AppLayout: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSessionsOpen, setIsSessionsOpen] = useState(false);
 
   const handleSignOut = () => {
     logout();
@@ -175,6 +178,18 @@ export const AppLayout: React.FC = () => {
                   </div>
                 </div>
 
+                <NotificationBell />
+
+                <button
+                  onClick={() => setIsSessionsOpen(true)}
+                  className="btn btn-secondary btn-sm"
+                  title="Manage Active Login Sessions"
+                  style={{ gap: '0.375rem', padding: '0.35rem 0.625rem' }}
+                >
+                  <Laptop size={14} color="var(--copper-dark)" />
+                  <span>Sessions</span>
+                </button>
+
                 <button
                   onClick={handleSignOut}
                   className="btn btn-secondary btn-sm"
@@ -233,6 +248,12 @@ export const AppLayout: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Active Session Management Modal */}
+      <SessionManagementModal
+        isOpen={isSessionsOpen}
+        onClose={() => setIsSessionsOpen(false)}
+      />
     </div>
   );
 };

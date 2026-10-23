@@ -15,12 +15,14 @@ import {
   Key,
   Eye,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
 import { useAuth } from '../features/auth/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { ConfirmModal } from '../features/common/ConfirmModal';
 import type { SuggestedGrant } from '../types';
 
 export const DocumentDetailPage: React.FC = () => {
@@ -40,7 +42,28 @@ export const DocumentDetailPage: React.FC = () => {
   // Permission grant form state
   const [selectedUserEmail, setSelectedUserEmail] = useState('');
   const [selectedPermLevel, setSelectedPermLevel] = useState<'read' | 'edit'>('read');
+  const [expiryPreset, setExpiryPreset] = useState<'never' | '1h' | '24h' | '7d' | '30d' | 'custom'>('never');
+  const [customExpiryDate, setCustomExpiryDate] = useState('');
   const [grantError, setGrantError] = useState<string | null>(null);
+
+  // In-App Confirmation Modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    variant: 'danger' | 'warning';
+    isLoading: boolean;
+    action: () => Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Confirm',
+    variant: 'danger',
+    isLoading: false,
+    action: async () => {},
+  });
 
   // AI recommendations state
   const [pendingSuggestionId, setPendingSuggestionId] = useState<string | null>(null);
@@ -176,18 +199,27 @@ export const DocumentDetailPage: React.FC = () => {
   };
 
   // Handle Delete
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!doc) return;
-    if (!window.confirm(`Are you sure you want to delete "${doc.title}"? This will permanently remove the private storage file.`)) {
-      return;
-    }
-    try {
-      await api.deleteDocument(doc.id);
-      toast.success('Document deleted successfully.');
-      navigate('/documents');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete document');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Protected Document',
+      message: `Are you sure you want to permanently delete "${doc.title}"? This will permanently remove the private storage file from the vault.`,
+      confirmLabel: 'Delete Permanently',
+      variant: 'danger',
+      isLoading: false,
+      action: async () => {
+        setConfirmConfig(prev => ({ ...prev, isLoading: true }));
+        try {
+          await api.deleteDocument(doc.id);
+          toast.success('Document deleted successfully.');
+          navigate('/documents');
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete document');
+          setConfirmConfig(prev => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      }
+    });
   };
 
   // Handle Grant Permission
@@ -195,13 +227,39 @@ export const DocumentDetailPage: React.FC = () => {
     e.preventDefault();
     if (!doc || !selectedUserEmail) return;
     setGrantError(null);
+
+    let expiresAtIso: string | undefined = undefined;
+    if (expiryPreset === '1h') {
+      expiresAtIso = new Date(Date.now() + 3600 * 1000).toISOString();
+    } else if (expiryPreset === '24h') {
+      expiresAtIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    } else if (expiryPreset === '7d') {
+      expiresAtIso = new Date(Date.now() + 7 * 86400 * 1000).toISOString();
+    } else if (expiryPreset === '30d') {
+      expiresAtIso = new Date(Date.now() + 30 * 86400 * 1000).toISOString();
+    } else if (expiryPreset === 'custom') {
+      if (!customExpiryDate) {
+        setGrantError('Please select a valid future expiry date and time');
+        return;
+      }
+      const customDate = new Date(customExpiryDate);
+      if (isNaN(customDate.getTime()) || customDate.getTime() <= Date.now()) {
+        setGrantError('Expiry date must be in the future');
+        return;
+      }
+      expiresAtIso = customDate.toISOString();
+    }
+
     try {
       await api.grantPermission(doc.id, {
         email: selectedUserEmail,
         permission_level: selectedPermLevel,
+        expires_at: expiresAtIso,
       });
-      toast.success(`Access granted to ${selectedUserEmail} (${selectedPermLevel}).`);
+      toast.success(`Access granted to ${selectedUserEmail} (${selectedPermLevel}${expiresAtIso ? ', time-limited' : ''}).`);
       setSelectedUserEmail('');
+      setExpiryPreset('never');
+      setCustomExpiryDate('');
       refetchPerms();
     } catch (err: any) {
       setGrantError(err.message || 'Failed to grant permission');
@@ -210,19 +268,29 @@ export const DocumentDetailPage: React.FC = () => {
   };
 
   // Handle Revoke Permission
-  const handleRevokePermission = async (userId: string, userEmail: string) => {
+  const handleRevokePermission = (userId: string, userEmail: string) => {
     if (!doc) return;
-    if (!window.confirm(`Immediately revoke access for ${userEmail}? Their next request will be denied.`)) {
-      return;
-    }
-    try {
-      await api.revokePermission(doc.id, userId);
-      refetchPerms();
-      queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
-      toast.success(`Access immediately revoked for ${userEmail}.`);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to revoke access');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Revoke Explicit Access',
+      message: `Immediately revoke access for ${userEmail}? Their next request will be denied.`,
+      confirmLabel: 'Revoke Access',
+      variant: 'danger',
+      isLoading: false,
+      action: async () => {
+        setConfirmConfig(prev => ({ ...prev, isLoading: true }));
+        try {
+          await api.revokePermission(doc.id, userId);
+          refetchPerms();
+          queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+          toast.success(`Access immediately revoked for ${userEmail}.`);
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to revoke access');
+        } finally {
+          setConfirmConfig(prev => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      }
+    });
   };
 
   // Handle AI Recommendation Request
@@ -605,6 +673,38 @@ export const DocumentDetailPage: React.FC = () => {
                   </select>
                 </div>
 
+                <div style={{ width: '170px' }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Clock size={12} color="var(--copper-dark)" />
+                    <span>Access Expiry</span>
+                  </label>
+                  <select
+                    className="input-field"
+                    value={expiryPreset}
+                    onChange={(e) => setExpiryPreset(e.target.value as any)}
+                  >
+                    <option value="never">Never (Indefinite)</option>
+                    <option value="1h">1 Hour</option>
+                    <option value="24h">24 Hours</option>
+                    <option value="7d">7 Days</option>
+                    <option value="30d">30 Days</option>
+                    <option value="custom">Custom Date & Time</option>
+                  </select>
+                </div>
+
+                {expiryPreset === 'custom' && (
+                  <div style={{ width: '200px' }}>
+                    <label className="form-label">Expiry Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      className="input-field"
+                      value={customExpiryDate}
+                      onChange={(e) => setCustomExpiryDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
                 <button type="submit" className="btn btn-primary" style={{ height: '38px', padding: '0 1rem' }}>
                   <Key size={14} color="var(--copper)" />
                   <span>Grant Access</span>
@@ -622,45 +722,78 @@ export const DocumentDetailPage: React.FC = () => {
                   <th>Permission Level</th>
                   <th>Granted By</th>
                   <th>Granted At</th>
-                  {isOwner && <th style={{ textAlign: 'right' }}>Revoke</th>}
+                  <th>Access Expiry</th>
+                  <th>Status</th>
+                  {isOwner && <th style={{ textAlign: 'right' }}>Action</th>}
                 </tr>
               </thead>
               <tbody>
                 {permissions && permissions.length > 0 ? (
-                  permissions.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--graphite)' }}>{p.user_display_name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.user_email}</div>
-                      </td>
-                      <td>
-                        <span className={`badge ${p.permission_level === 'edit' ? 'badge-copper' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
-                          {p.permission_level === 'edit' ? 'Read & Edit' : 'Read Only'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                        {p.granted_by_email || 'Owner'}
-                      </td>
-                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                        {formatToIST(p.granted_at)}
-                      </td>
-                      {isOwner && (
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleRevokePermission(p.user_id, p.user_email)}
-                            title="Immediate permission revocation"
-                          >
-                            <X size={13} />
-                            <span>Revoke Access</span>
-                          </button>
+                  permissions.map((p) => {
+                    const isRevoked = !!p.revoked_at || p.status === 'revoked';
+                    const isExpired = p.is_expired || p.status === 'expired';
+                    return (
+                      <tr key={p.id} style={{ opacity: isRevoked ? 0.6 : 1 }}>
+                        <td>
+                          <div style={{ fontWeight: 600, color: 'var(--graphite)' }}>{p.user_display_name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.user_email}</div>
                         </td>
-                      )}
-                    </tr>
-                  ))
+                        <td>
+                          <span className={`badge ${p.permission_level === 'edit' ? 'badge-copper' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
+                            {p.permission_level === 'edit' ? 'Read & Edit' : 'Read Only'}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                          {p.granted_by_email || 'Owner'}
+                        </td>
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                          {formatToIST(p.granted_at)}
+                        </td>
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                          {p.expires_at ? (
+                            <div>
+                              <div>{formatToIST(p.expires_at)}</div>
+                              <div style={{ fontSize: '0.7rem', color: isExpired ? 'var(--danger)' : 'var(--text-muted)' }}>
+                                {isExpired ? 'Expired' : 'Time-limited'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>Never</span>
+                          )}
+                        </td>
+                        <td>
+                          {isRevoked ? (
+                            <span className="badge badge-danger">Revoked</span>
+                          ) : isExpired ? (
+                            <span className="badge" style={{ backgroundColor: '#FDF6B2', color: '#723B13', border: '1px solid #FCE96A' }}>Expired</span>
+                          ) : (
+                            <span className="badge badge-green">Active</span>
+                          )}
+                        </td>
+                        {isOwner && (
+                          <td style={{ textAlign: 'right' }}>
+                            {!isRevoked ? (
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleRevokePermission(p.user_id, p.user_email)}
+                                title="Immediate permission revocation"
+                              >
+                                <X size={13} />
+                                <span>Revoke</span>
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                Revoked
+                              </span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan={isOwner ? 5 : 4} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={isOwner ? 7 : 6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
                       No explicit permissions have been granted yet. Only the document owner has access.
                     </td>
                   </tr>
@@ -1083,6 +1216,18 @@ export const DocumentDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Corporate In-App Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmLabel={confirmConfig.confirmLabel}
+        variant={confirmConfig.variant}
+        isLoading={confirmConfig.isLoading}
+        onConfirm={confirmConfig.action}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

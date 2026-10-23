@@ -6,6 +6,7 @@ class PermissionGrantRequest(BaseModel):
     user_id: Optional[str] = None
     email: Optional[EmailStr] = None
     permission_level: str = Field(..., pattern="^(read|edit)$")
+    expires_at: Optional[datetime] = None
 
 class PermissionRevokeRequest(BaseModel):
     user_id: str
@@ -22,5 +23,8 @@ class PermissionResponse(BaseModel):
     granted_at: datetime
     updated_at: datetime
     revoked_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    is_expired: bool = False
+    status: str = "active"
 
     model_config = ConfigDict(from_attributes=True)

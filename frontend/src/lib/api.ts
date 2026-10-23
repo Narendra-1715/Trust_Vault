@@ -5,7 +5,9 @@ import type {
   DocumentPermission, 
   AuditEvent, 
   AuditVerificationReport,
-  AIRecommendationResult
+  AIRecommendationResult,
+  UserSession,
+  SecurityAlert
 } from '../types';
 
 // Dynamically resolve API URL with automated protocol & domain handling for cloud hosting (Render/Vercel)
@@ -118,6 +120,17 @@ export const api = {
 
   getCurrentUser: () => request<User>('/auth/me'),
 
+  // Sessions
+  listSessions: () => request<UserSession[]>('/auth/sessions'),
+  revokeSession: (sessionId: string) =>
+    request<void>(`/auth/sessions/${sessionId}`, {
+      method: 'DELETE',
+    }),
+  revokeOtherSessions: () =>
+    request<{ message: string; revoked_count: number }>('/auth/sessions?exclude_current=true', {
+      method: 'DELETE',
+    }),
+
   // Users
   listUsers: () => request<User[]>('/users'),
   listAllUsersAdmin: () => request<User[]>('/users/all'),
@@ -128,10 +141,30 @@ export const api = {
     }),
 
   // Documents
-  listDocuments: (params: { query?: string; category?: string; admin_inventory?: boolean; page?: number; page_size?: number }) => {
+  listDocuments: (params: { 
+    query?: string; 
+    category?: string; 
+    file_type?: string;
+    owner_id?: string;
+    date_from?: string;
+    date_to?: string;
+    permission_filter?: 'owned' | 'shared' | 'all';
+    sort_by?: 'created_at' | 'title' | 'file_size';
+    sort_order?: 'asc' | 'desc';
+    admin_inventory?: boolean; 
+    page?: number; 
+    page_size?: number 
+  }) => {
     const searchParams = new URLSearchParams();
     if (params.query) searchParams.append('query', params.query);
     if (params.category && params.category !== 'all') searchParams.append('category', params.category);
+    if (params.file_type && params.file_type !== 'all') searchParams.append('file_type', params.file_type);
+    if (params.owner_id && params.owner_id !== 'all') searchParams.append('owner_id', params.owner_id);
+    if (params.date_from) searchParams.append('date_from', params.date_from);
+    if (params.date_to) searchParams.append('date_to', params.date_to);
+    if (params.permission_filter && params.permission_filter !== 'all') searchParams.append('permission_filter', params.permission_filter);
+    if (params.sort_by) searchParams.append('sort_by', params.sort_by);
+    if (params.sort_order) searchParams.append('sort_order', params.sort_order);
     if (params.admin_inventory) searchParams.append('admin_inventory', 'true');
     if (params.page) searchParams.append('page', params.page.toString());
     if (params.page_size) searchParams.append('page_size', params.page_size.toString());
@@ -217,10 +250,10 @@ export const api = {
     }),
 
   // Permissions
-  getDocumentPermissions: (documentId: string) =>
-    request<DocumentPermission[]>(`/documents/${documentId}/permissions`),
+  getDocumentPermissions: (documentId: string, includeRevoked: boolean = true) =>
+    request<DocumentPermission[]>(`/documents/${documentId}/permissions?include_revoked=${includeRevoked}`),
 
-  grantPermission: (documentId: string, data: { email?: string; user_id?: string; permission_level: 'read' | 'edit' }) =>
+  grantPermission: (documentId: string, data: { email?: string; user_id?: string; permission_level: 'read' | 'edit'; expires_at?: string }) =>
     request<DocumentPermission>(`/documents/${documentId}/permissions`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -244,6 +277,62 @@ export const api = {
   },
 
   verifyAuditIntegrity: () => request<AuditVerificationReport>('/audit/verify'),
+
+  exportAuditLog: async (params: { format: 'csv' | 'json'; action?: string; outcome?: string; date_from?: string; date_to?: string; document_id?: string }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('format', params.format);
+    if (params.action) searchParams.append('action', params.action);
+    if (params.outcome) searchParams.append('outcome', params.outcome);
+    if (params.document_id) searchParams.append('document_id', params.document_id);
+    if (params.date_from) searchParams.append('date_from', params.date_from);
+    if (params.date_to) searchParams.append('date_to', params.date_to);
+
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE}/audit/export?${searchParams.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      let errorMsg = 'Failed to export audit log';
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch {
+        /* ignore parse error */
+      }
+      throw new ApiError(errorMsg, response.status);
+    }
+
+    const blob = await response.blob();
+    const filename = `trustvault_audit_${new Date().toISOString().slice(0, 10)}.${params.format}`;
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  // Notifications / Security Alerts
+  listNotifications: (unreadOnly: boolean = false) =>
+    request<SecurityAlert[]>(`/notifications?unread_only=${unreadOnly}`),
+
+  getUnreadNotificationCount: () =>
+    request<{ unread_count: number }>('/notifications/unread-count'),
+
+  markNotificationRead: (id: string) =>
+    request<SecurityAlert>(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    }),
+
+  markAllNotificationsRead: () =>
+    request<{ message: string; marked_count: number }>('/notifications/mark-all-read', {
+      method: 'POST',
+    }),
 
   // AI Access Recommendations
   requestAIRecommendations: (documentId: string) =>

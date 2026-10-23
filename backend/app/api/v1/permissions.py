@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,12 +11,30 @@ from app.schemas.permission import PermissionResponse, PermissionGrantRequest
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
 from app.audit.service import log_audit_event
+from app.notifications.service import create_security_notification
 
 router = APIRouter()
 
 def build_permission_response(perm: DocumentPermission) -> PermissionResponse:
     user = perm.user
     granter = perm.granter
+    
+    now_utc = datetime.now(timezone.utc)
+    is_revoked = perm.revoked_at is not None
+    is_expired = False
+    if perm.expires_at is not None:
+        exp = perm.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        is_expired = exp <= now_utc
+
+    if is_revoked:
+        perm_status = "revoked"
+    elif is_expired:
+        perm_status = "expired"
+    else:
+        perm_status = "active"
+
     return PermissionResponse(
         id=perm.id,
         document_id=perm.document_id,
@@ -28,27 +46,31 @@ def build_permission_response(perm: DocumentPermission) -> PermissionResponse:
         granted_by_email=granter.email if granter else None,
         granted_at=perm.granted_at,
         updated_at=perm.updated_at,
-        revoked_at=perm.revoked_at
+        revoked_at=perm.revoked_at,
+        expires_at=perm.expires_at,
+        is_expired=is_expired,
+        status=perm_status
     )
 
 @router.get("/documents/{document_id}/permissions", response_model=List[PermissionResponse])
 def get_document_permissions(
     document_id: str,
+    include_revoked: bool = Query(False, description="Include revoked permissions"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Lists active sharing permissions for a document.
+    Lists sharing permissions for a document.
     Requires read authorization.
     """
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     AuthorizationPolicy.require_read(db, current_user, doc)
 
-    perms = db.query(DocumentPermission).filter(
-        DocumentPermission.document_id == document_id,
-        DocumentPermission.revoked_at.is_(None)
-    ).all()
+    query = db.query(DocumentPermission).filter(DocumentPermission.document_id == document_id)
+    if not include_revoked:
+        query = query.filter(DocumentPermission.revoked_at.is_(None))
 
+    perms = query.order_by(DocumentPermission.granted_at.desc()).all()
     return [build_permission_response(p) for p in perms]
 
 @router.post("/documents/{document_id}/permissions", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
@@ -86,19 +108,31 @@ def grant_document_permission(
             detail="Document owner already has full access"
         )
 
-    # Check for existing active permission
+    # Validate expires_at
+    expires_at_val = grant_in.expires_at
+    now_utc = datetime.now(timezone.utc)
+    if expires_at_val is not None:
+        if expires_at_val.tzinfo is None:
+            expires_at_val = expires_at_val.replace(tzinfo=timezone.utc)
+        if expires_at_val <= now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Expiration date must be in the future"
+            )
+
+    # Check for existing active or previous permission
     existing_perm = db.query(DocumentPermission).filter(
         DocumentPermission.document_id == document_id,
         DocumentPermission.user_id == target_user.id,
         DocumentPermission.revoked_at.is_(None)
     ).first()
 
-    now_utc = datetime.now(timezone.utc)
     if existing_perm:
         old_level = existing_perm.permission_level
         existing_perm.permission_level = grant_in.permission_level
         existing_perm.granted_by = current_user.id
         existing_perm.updated_at = now_utc
+        existing_perm.expires_at = expires_at_val
         db.commit()
         db.refresh(existing_perm)
         perm_record = existing_perm
@@ -106,7 +140,8 @@ def grant_document_permission(
         meta = {
             "target_user_email": target_user.email,
             "old_level": old_level,
-            "new_level": grant_in.permission_level
+            "new_level": grant_in.permission_level,
+            "expires_at": expires_at_val.isoformat() if expires_at_val else None
         }
     else:
         new_perm = DocumentPermission(
@@ -115,7 +150,8 @@ def grant_document_permission(
             permission_level=grant_in.permission_level,
             granted_by=current_user.id,
             granted_at=now_utc,
-            updated_at=now_utc
+            updated_at=now_utc,
+            expires_at=expires_at_val
         )
         db.add(new_perm)
         db.commit()
@@ -124,7 +160,8 @@ def grant_document_permission(
         action_name = "permission.grant"
         meta = {
             "target_user_email": target_user.email,
-            "permission_level": grant_in.permission_level
+            "permission_level": grant_in.permission_level,
+            "expires_at": expires_at_val.isoformat() if expires_at_val else None
         }
 
     log_audit_event(
@@ -136,6 +173,17 @@ def grant_document_permission(
         actor_id=current_user.id,
         request_id=request_id,
         metadata=meta
+    )
+
+    # Dispatch security alert to recipient
+    create_security_notification(
+        db=db,
+        user_id=target_user.id,
+        title="Document Access Granted",
+        message=f"You have been granted {grant_in.permission_level} access to '{doc.title}' by {current_user.display_name}.",
+        severity="info",
+        event_type="document.permission.granted",
+        resource_id=doc.id
     )
 
     return build_permission_response(perm_record)
@@ -171,6 +219,17 @@ def revoke_document_permission(
 
     perm.revoked_at = datetime.now(timezone.utc)
     db.commit()
+
+    # Dispatch security alert to revoked user
+    create_security_notification(
+        db=db,
+        user_id=user_id,
+        title="Document Access Revoked",
+        message=f"Your access to '{doc.title}' has been revoked by {current_user.display_name}.",
+        severity="warning",
+        event_type="document.permission.revoked",
+        resource_id=doc.id
+    )
 
     log_audit_event(
         db=db,

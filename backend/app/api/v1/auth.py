@@ -1,12 +1,20 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.core.config import settings
 from app.core.security import verify_password, hash_password, create_access_token
 from app.core.rate_limit import login_limiter, check_rate_limit
+from app.core.user_agent import parse_device_info
 from app.models.user import User
+from app.models.session import UserSession
 from app.schemas.user import UserCreate, UserResponse, LoginRequest, TokenResponse
+from app.schemas.session import SessionResponse, RevokeAllResponse
 from app.api.deps import get_current_user, get_request_id
 from app.audit.service import log_audit_event
+from app.notifications.service import create_security_notification
 
 router = APIRouter()
 
@@ -60,7 +68,47 @@ def login(
             detail="Account is disabled. Contact system administrator."
         )
 
-    access_token = create_access_token(subject=user.id, role=user.role)
+    # Generate unique session identifier JTI
+    jti = str(uuid.uuid4())
+    access_token = create_access_token(subject=user.id, role=user.role, jti=jti)
+
+    # Determine client IP and User Agent
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+
+    user_agent = request.headers.get("user-agent", "Unknown")
+    device_info = parse_device_info(user_agent)
+    now_utc = datetime.now(timezone.utc)
+    session_expire = now_utc + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    # Persist active session
+    new_session = UserSession(
+        user_id=user.id,
+        session_token_jti=jti,
+        ip_address=client_ip,
+        user_agent=user_agent[:500],
+        device_info=device_info,
+        created_at=now_utc,
+        last_active_at=now_utc,
+        expires_at=session_expire,
+        revoked_at=None
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    log_audit_event(
+        db=db,
+        action="session.created",
+        resource_type="session",
+        resource_id=new_session.id,
+        outcome="success",
+        actor_id=user.id,
+        request_id=request_id,
+        metadata={"ip_address": client_ip, "device_info": device_info, "role": user.role}
+    )
 
     log_audit_event(
         db=db,
@@ -70,7 +118,17 @@ def login(
         outcome="success",
         actor_id=user.id,
         request_id=request_id,
-        metadata={"role": user.role}
+        metadata={"role": user.role, "session_id": new_session.id}
+    )
+
+    create_security_notification(
+        db=db,
+        user_id=user.id,
+        title="New Login Session",
+        message=f"New session established on {device_info} from IP {client_ip}.",
+        severity="info",
+        event_type="session.created",
+        resource_id=new_session.id
     )
 
     return TokenResponse(
@@ -135,3 +193,158 @@ def register(
 def get_me(current_user: User = Depends(get_current_user)):
     """Returns profile of currently authenticated user."""
     return current_user
+
+@router.get("/sessions", response_model=List[SessionResponse])
+def list_user_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lists all active and recent login sessions for the currently authenticated user.
+    """
+    sessions = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id
+    ).order_by(UserSession.last_active_at.desc()).all()
+
+    current_session = getattr(request.state, "current_session", None)
+    current_session_id = current_session.id if current_session else None
+    now_utc = datetime.now(timezone.utc)
+
+    results = []
+    for s in sessions:
+        exp = s.expires_at.replace(tzinfo=timezone.utc) if s.expires_at.tzinfo is None else s.expires_at
+        is_active = (s.revoked_at is None) and (exp > now_utc)
+        results.append(
+            SessionResponse(
+                id=s.id,
+                user_id=s.user_id,
+                ip_address=s.ip_address,
+                user_agent=s.user_agent,
+                device_info=s.device_info,
+                created_at=s.created_at,
+                last_active_at=s.last_active_at,
+                expires_at=s.expires_at,
+                is_current=(s.id == current_session_id),
+                is_active=is_active
+            )
+        )
+    return results
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_single_session(
+    session_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revokes a specific session belonging to the currently authenticated user.
+    Subsequent requests using this session token are immediately rejected.
+    """
+    session = db.query(UserSession).filter(
+        UserSession.id == session_id,
+        UserSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+
+    if session.revoked_at is None:
+        now_utc = datetime.now(timezone.utc)
+        session.revoked_at = now_utc
+        db.commit()
+
+        request_id = get_request_id(request)
+        current_session = getattr(request.state, "current_session", None)
+        is_current = current_session and (current_session.id == session.id)
+
+        log_audit_event(
+            db=db,
+            action="session.revoked",
+            resource_type="session",
+            resource_id=session.id,
+            outcome="success",
+            actor_id=current_user.id,
+            request_id=request_id,
+            metadata={
+                "ip_address": session.ip_address,
+                "device_info": session.device_info,
+                "is_current_session": bool(is_current)
+            }
+        )
+
+        create_security_notification(
+            db=db,
+            user_id=current_user.id,
+            title="Session Revoked",
+            message=f"Login session on {session.device_info or 'device'} was terminated.",
+            severity="warning",
+            event_type="session.revoked",
+            resource_id=session.id
+        )
+
+    return None
+
+@router.delete("/sessions", response_model=RevokeAllResponse)
+def revoke_other_sessions(
+    request: Request,
+    exclude_current: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revokes all active sessions for the user, with option to preserve the current session.
+    """
+    current_session = getattr(request.state, "current_session", None)
+    current_session_id = current_session.id if current_session else None
+
+    query = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.revoked_at.is_(None)
+    )
+
+    if exclude_current and current_session_id:
+        query = query.filter(UserSession.id != current_session_id)
+
+    sessions_to_revoke = query.all()
+    now_utc = datetime.now(timezone.utc)
+    revoked_count = len(sessions_to_revoke)
+
+    for s in sessions_to_revoke:
+        s.revoked_at = now_utc
+
+    db.commit()
+
+    request_id = get_request_id(request)
+    log_audit_event(
+        db=db,
+        action="session.revoked_all",
+        resource_type="session",
+        resource_id=current_user.id,
+        outcome="success",
+        actor_id=current_user.id,
+        request_id=request_id,
+        metadata={
+            "revoked_count": revoked_count,
+            "excluded_current": bool(exclude_current and current_session_id)
+        }
+    )
+
+    if revoked_count > 0:
+        create_security_notification(
+            db=db,
+            user_id=current_user.id,
+            title="Remote Sessions Revoked",
+            message=f"Terminated {revoked_count} active remote login session(s).",
+            severity="warning",
+            event_type="session.revoked_all"
+        )
+
+    return RevokeAllResponse(
+        message=f"Successfully revoked {revoked_count} active session(s).",
+        revoked_count=revoked_count
+    )

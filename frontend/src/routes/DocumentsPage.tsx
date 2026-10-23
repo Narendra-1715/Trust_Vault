@@ -1,7 +1,21 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Plus, Search, Filter, Download, Eye, Lock, ShieldCheck, Database } from 'lucide-react';
+import { 
+  FileText, 
+  Plus, 
+  Search, 
+  Filter, 
+  Download, 
+  Eye, 
+  Lock, 
+  ShieldCheck, 
+  Database,
+  SlidersHorizontal,
+  RotateCcw,
+  Calendar,
+  ArrowUpDown
+} from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { UploadModal } from '../features/documents/UploadModal';
@@ -12,14 +26,45 @@ export const DocumentsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [fileType, setFileType] = useState('all');
+  const [permissionFilter, setPermissionFilter] = useState<'all' | 'owned' | 'shared'>('all');
+  const [sortBy, setSortBy] = useState<'created_at' | 'title' | 'file_size'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
+  const activeFiltersCount = (selectedCategory !== 'all' ? 1 : 0) +
+    (fileType !== 'all' ? 1 : 0) +
+    (permissionFilter !== 'all' ? 1 : 0) +
+    (sortBy !== 'created_at' || sortOrder !== 'desc' ? 1 : 0) +
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0);
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setFileType('all');
+    setPermissionFilter('all');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setDateFrom('');
+    setDateTo('');
+  };
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['documents', searchTerm, selectedCategory],
+    queryKey: ['documents', searchTerm, selectedCategory, fileType, permissionFilter, sortBy, sortOrder, dateFrom, dateTo],
     queryFn: () => api.listDocuments({
       query: searchTerm || undefined,
       category: selectedCategory !== 'all' ? selectedCategory : undefined,
+      file_type: fileType !== 'all' ? fileType : undefined,
+      permission_filter: permissionFilter !== 'all' ? permissionFilter : undefined,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+      date_to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
     }),
   });
 
@@ -218,8 +263,8 @@ export const DocumentsPage: React.FC = () => {
       </div>
 
       {/* ================= SEARCH & FILTER CONTROLS ================= */}
-      <div className="panel" style={{ padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="panel" style={{ padding: '0.875rem 1rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '240px' }}>
             <Search size={16} color="var(--text-muted)" />
             <input
@@ -238,24 +283,158 @@ export const DocumentsPage: React.FC = () => {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Filter size={14} color="var(--text-muted)" />
-            <select
-              className="input-field"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{ width: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <Filter size={14} color="var(--text-muted)" />
+              <select
+                className="input-field"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{ width: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}
+              >
+                <option value="all">All Categories</option>
+                <option value="Financial">Financial</option>
+                <option value="Legal">Legal</option>
+                <option value="Executive">Executive</option>
+                <option value="Engineering">Engineering</option>
+                <option value="HR">HR</option>
+                <option value="General">General</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              style={{
+                gap: '0.375rem',
+                backgroundColor: showAdvancedFilters ? 'var(--copper-light)' : undefined,
+                borderColor: showAdvancedFilters ? 'var(--copper)' : undefined,
+              }}
             >
-              <option value="all">All Categories</option>
-              <option value="Financial">Financial</option>
-              <option value="Legal">Legal</option>
-              <option value="Executive">Executive</option>
-              <option value="Engineering">Engineering</option>
-              <option value="HR">HR</option>
-              <option value="General">General</option>
-            </select>
+              <SlidersHorizontal size={13} color={activeFiltersCount > 0 ? 'var(--copper-dark)' : 'currentColor'} />
+              <span>Advanced Filters</span>
+              {activeFiltersCount > 0 && (
+                <span className="badge badge-copper" style={{ fontSize: '0.625rem', padding: '0.05rem 0.35rem' }}>
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {activeFiltersCount > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleResetFilters}
+                title="Reset all filters to defaults"
+                style={{ gap: '0.25rem', color: 'var(--text-muted)' }}
+              >
+                <RotateCcw size={12} />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Expandable Advanced Search Drawer */}
+        {showAdvancedFilters && (
+          <div style={{
+            marginTop: '0.875rem',
+            paddingTop: '0.875rem',
+            borderTop: '1px solid var(--border)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '0.875rem',
+          }}>
+            <div>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>File Type / Format</label>
+              <select
+                className="input-field"
+                value={fileType}
+                onChange={(e) => setFileType(e.target.value)}
+                style={{ fontSize: '0.8125rem', padding: '0.35rem 0.5rem' }}
+              >
+                <option value="all">All Formats</option>
+                <option value="pdf">PDF Documents (.pdf)</option>
+                <option value="docx">Word (.docx)</option>
+                <option value="csv">Data Spreadsheets (.csv)</option>
+                <option value="txt">Plain Text (.txt)</option>
+                <option value="json">Structured JSON (.json)</option>
+                <option value="image">Images (PNG/JPG)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Ownership Scope</label>
+              <select
+                className="input-field"
+                value={permissionFilter}
+                onChange={(e) => setPermissionFilter(e.target.value as any)}
+                style={{ fontSize: '0.8125rem', padding: '0.35rem 0.5rem' }}
+              >
+                <option value="all">All Authorized</option>
+                <option value="owned">Owned by Me</option>
+                <option value="shared">Shared with Me</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <ArrowUpDown size={11} />
+                <span>Sort Field &amp; Order</span>
+              </label>
+              <div style={{ display: 'flex', gap: '0.375rem' }}>
+                <select
+                  className="input-field"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  style={{ fontSize: '0.8125rem', padding: '0.35rem 0.5rem', flex: 1 }}
+                >
+                  <option value="created_at">Date Created</option>
+                  <option value="title">Document Title</option>
+                  <option value="file_size">File Size</option>
+                </select>
+                <select
+                  className="input-field"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as any)}
+                  style={{ fontSize: '0.8125rem', padding: '0.35rem 0.5rem', width: '80px' }}
+                >
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Calendar size={11} />
+                <span>Created From</span>
+              </label>
+              <input
+                type="date"
+                className="input-field"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{ fontSize: '0.8125rem', padding: '0.3rem 0.5rem' }}
+              />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Calendar size={11} />
+                <span>Created To</span>
+              </label>
+              <input
+                type="date"
+                className="input-field"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{ fontSize: '0.8125rem', padding: '0.3rem 0.5rem' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ================= DOCUMENTS TABLE ================= */}

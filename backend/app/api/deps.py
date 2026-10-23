@@ -1,11 +1,13 @@
 import uuid
 from typing import Generator, Optional
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
+from app.models.session import UserSession
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -56,6 +58,32 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user account"
         )
+
+    # Session validation for tokens with JTI
+    jti = payload.get("jti")
+    current_session = None
+    if jti:
+        session = db.query(UserSession).filter(UserSession.session_token_jti == jti).first()
+        if not session or session.revoked_at is not None:
+            raise credentials_exception
+
+        now_utc = datetime.now(timezone.utc)
+        exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+        if exp < now_utc:
+            raise credentials_exception
+
+        current_session = session
+        # Touch last_active_at periodically
+        last_active = session.last_active_at.replace(tzinfo=timezone.utc) if session.last_active_at.tzinfo is None else session.last_active_at
+        if (now_utc - last_active).total_seconds() > 60:
+            session.last_active_at = now_utc
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    request.state.current_session = current_session
+    request.state.current_user = user
 
     return user
 

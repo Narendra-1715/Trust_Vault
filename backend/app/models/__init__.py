@@ -4,6 +4,8 @@ from app.models.document import Document
 from app.models.permission import DocumentPermission
 from app.models.audit import AuditEvent
 from app.models.ai_suggestion import AIAccessSuggestion
+from app.models.session import UserSession
+from app.models.notification import SecurityNotification
 
 __all__ = [
     "Base",
@@ -11,5 +13,7 @@ __all__ = [
     "Document",
     "DocumentPermission",
     "AuditEvent",
-    "AIAccessSuggestion"
+    "AIAccessSuggestion",
+    "UserSession",
+    "SecurityNotification"
 ]

@@ -23,6 +23,7 @@ from app.storage.local import (
 from app.core.config import settings
 from app.core.rate_limit import upload_limiter, check_rate_limit
 from app.audit.service import log_audit_event
+from app.notifications.service import create_security_notification, check_and_notify_repeated_denials
 
 router = APIRouter()
 
@@ -159,8 +160,15 @@ async def upload_document(
 
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
-    query: Optional[str] = Query(None, description="Search term for title or description"),
+    query: Optional[str] = Query(None, description="Search term for title, description, or filename"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    file_type: Optional[str] = Query(None, description="Filter by file extension or media type"),
+    owner_id: Optional[str] = Query(None, description="Filter by owner user ID"),
+    date_from: Optional[datetime] = Query(None, description="Filter documents created on or after this timestamp"),
+    date_to: Optional[datetime] = Query(None, description="Filter documents created on or before this timestamp"),
+    permission_filter: Optional[str] = Query(None, description="Filter by 'owned' or 'shared'"),
+    sort_by: Optional[str] = Query("created_at", description="Sort field: created_at, title, file_size"),
+    sort_order: Optional[str] = Query("desc", description="Sort direction: asc or desc"),
     admin_inventory: bool = Query(False, description="Admin inventory view"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -170,6 +178,7 @@ def list_documents(
     """
     Lists only authorized documents for the current user.
     Server-side authorization is applied before returning records.
+    Supports advanced filtering and multi-attribute sorting with zero metadata leakage.
     """
     base_filter = [Document.deleted_at.is_(None)]
 
@@ -178,10 +187,15 @@ def list_documents(
         # Admin inspecting inventory
         pass
     else:
-        # User sees: 1) Owned documents, OR 2) Documents where user has an active grant
+        # User sees: 1) Owned documents, OR 2) Documents where user has an active, non-expired grant
+        now_utc = datetime.now(timezone.utc)
         permitted_doc_ids = db.query(DocumentPermission.document_id).filter(
             DocumentPermission.user_id == current_user.id,
-            DocumentPermission.revoked_at.is_(None)
+            DocumentPermission.revoked_at.is_(None),
+            or_(
+                DocumentPermission.expires_at.is_(None),
+                DocumentPermission.expires_at > now_utc
+            )
         ).scalar_subquery()
 
         base_filter.append(
@@ -191,7 +205,8 @@ def list_documents(
             )
         )
 
-    if query:
+    # Search query
+    if query and query.strip():
         search_term = f"%{query.strip()}%"
         base_filter.append(
             or_(
@@ -201,14 +216,56 @@ def list_documents(
             )
         )
 
+    # Category filter
     if category and category.lower() != "all":
         base_filter.append(Document.category.ilike(category.strip()))
+
+    # File type / extension filter
+    if file_type and file_type.strip() and file_type.lower() != "all":
+        cleaned_ft = file_type.strip().lower()
+        base_filter.append(
+            or_(
+                Document.detected_media_type.ilike(f"%{cleaned_ft}%"),
+                Document.original_filename.ilike(f"%.{cleaned_ft}"),
+                Document.original_filename.ilike(f"%{cleaned_ft}")
+            )
+        )
+
+    # Specific owner filter
+    if owner_id and owner_id.strip():
+        base_filter.append(Document.owner_id == owner_id.strip())
+
+    # Date range filters
+    if date_from:
+        base_filter.append(Document.created_at >= date_from)
+    if date_to:
+        base_filter.append(Document.created_at <= date_to)
+
+    # Permission filter (owned vs shared)
+    if permission_filter == "owned":
+        base_filter.append(Document.owner_id == current_user.id)
+    elif permission_filter == "shared":
+        base_filter.append(Document.owner_id != current_user.id)
+
+    # Sorting
+    sort_column = Document.created_at
+    if sort_by == "title":
+        sort_column = Document.title
+    elif sort_by == "file_size":
+        sort_column = Document.file_size
+    elif sort_by == "created_at":
+        sort_column = Document.created_at
+
+    if sort_order == "asc":
+        order_clause = sort_column.asc()
+    else:
+        order_clause = sort_column.desc()
 
     total = db.query(Document).filter(*base_filter).count()
     documents = (
         db.query(Document)
         .filter(*base_filter)
-        .order_by(Document.created_at.desc())
+        .order_by(order_clause)
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -252,17 +309,34 @@ def download_document(
     request_id = get_request_id(request)
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     
-    # Live authorization check (will reject immediately if access was revoked)
+    # Live authorization check (will reject immediately if access was revoked or expired)
     if not doc or not AuthorizationPolicy.can_read_document(db, current_user, doc):
+        now_utc = datetime.now(timezone.utc)
+        expired_perm = db.query(DocumentPermission).filter(
+            DocumentPermission.document_id == document_id,
+            DocumentPermission.user_id == current_user.id,
+            DocumentPermission.revoked_at.is_(None),
+            DocumentPermission.expires_at.isnot(None),
+            DocumentPermission.expires_at <= now_utc
+        ).first()
+
+        action = "document.access.expired" if expired_perm else "document.download.denied"
+        reason = "Access grant has expired" if expired_perm else "Unauthorized download attempt"
         log_audit_event(
             db=db,
-            action="document.download.denied",
+            action=action,
             resource_type="document",
             resource_id=document_id,
             outcome="denied",
             actor_id=current_user.id,
             request_id=request_id,
-            metadata={"reason": "Unauthorized download attempt"}
+            metadata={"reason": reason}
+        )
+        check_and_notify_repeated_denials(
+            db=db,
+            user_id=current_user.id,
+            resource_id=document_id,
+            resource_title=doc.title if doc else None
         )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -303,6 +377,15 @@ def download_document(
                     "expected_checksum": doc.checksum,
                     "actual_checksum": actual_checksum
                 }
+            )
+            create_security_notification(
+                db=db,
+                user_id=doc.owner_id,
+                title="Document Integrity Check Failed",
+                message=f"Checksum mismatch detected for document '{doc.title}'. File data on volume does not match recorded SHA-256 hash.",
+                severity="critical",
+                event_type="document.integrity.mismatch",
+                resource_id=doc.id
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
