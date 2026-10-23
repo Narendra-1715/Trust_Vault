@@ -13,7 +13,9 @@ import {
   Check, 
   X, 
   Key,
-  Eye
+  Eye,
+  Copy,
+  CheckCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -33,6 +35,7 @@ export const DocumentDetailPage: React.FC = () => {
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editCat, setEditCat] = useState('');
+  const [copiedChecksum, setCopiedChecksum] = useState(false);
 
   // Permission grant form state
   const [selectedUserEmail, setSelectedUserEmail] = useState('');
@@ -51,6 +54,7 @@ export const DocumentDetailPage: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewTimestamp, setPreviewTimestamp] = useState<string>('');
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // Queries
@@ -80,6 +84,15 @@ export const DocumentDetailPage: React.FC = () => {
   const isOwner = doc?.owner_id === user?.id;
   const canEdit = isOwner || doc?.effective_permission === 'edit';
 
+  const handleCopyChecksum = () => {
+    if (doc?.checksum) {
+      navigator.clipboard.writeText(doc.checksum);
+      setCopiedChecksum(true);
+      toast.info('SHA-256 Checksum copied to clipboard.');
+      setTimeout(() => setCopiedChecksum(false), 2500);
+    }
+  };
+
   // Handle Secure Preview with Forensic Watermarking
   const handleOpenPreview = async () => {
     if (!doc) return;
@@ -87,6 +100,7 @@ export const DocumentDetailPage: React.FC = () => {
     setIsPreviewLoading(true);
     setPreviewBlobUrl(null);
     setPreviewText(null);
+    setPreviewTimestamp(formatToIST(new Date()));
 
     try {
       const blob = await api.fetchDocumentBlob(doc.id);
@@ -271,17 +285,39 @@ export const DocumentDetailPage: React.FC = () => {
   };
 
   if (isDocLoading) {
-    return <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>Loading document...</div>;
+    return (
+      <div className="container" style={{ padding: '4rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '10px', height: '10px' }}></span>
+          <span style={{ fontSize: '0.875rem' }}>Loading confidential document...</span>
+        </div>
+      </div>
+    );
   }
 
   if (docError || !doc) {
     return (
-      <div className="container" style={{ padding: '3rem 0', textAlign: 'center' }}>
-        <div className="panel" style={{ maxWidth: '500px', margin: '0 auto', padding: '2rem' }}>
-          <Shield size={32} style={{ color: 'var(--danger)', margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Document Inaccessible</h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-            This document does not exist, or your access permission has been revoked.
+      <div className="container" style={{ padding: '3.5rem 0', textAlign: 'center' }}>
+        <div className="panel" style={{ maxWidth: '480px', margin: '0 auto', padding: '2.5rem' }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'var(--danger-bg)',
+            border: '1px solid var(--danger-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--danger)',
+            margin: '0 auto 1rem',
+          }}>
+            <Shield size={22} />
+          </div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--graphite)', marginBottom: '0.5rem' }}>
+            Document Inaccessible
+          </h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+            This document does not exist, or your access permission has been revoked by the owner.
           </p>
           <Link to="/documents" className="btn btn-primary btn-sm">
             <ArrowLeft size={14} />
@@ -294,50 +330,66 @@ export const DocumentDetailPage: React.FC = () => {
 
   return (
     <div className="container">
-      {/* Back button */}
-      <Link to="/documents" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+      {/* Back Link */}
+      <Link 
+        to="/documents" 
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.375rem',
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          color: 'var(--text-secondary)',
+          marginBottom: '1.25rem',
+          transition: 'color 0.15s ease',
+        }}
+      >
         <ArrowLeft size={14} />
         <span>Back to authorized documents</span>
       </Link>
 
-      {/* Top Header Card */}
+      {/* ================= PRIMARY DOCUMENT HEADER CARD ================= */}
       <div className="panel" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.25rem' }}>
+          <div style={{ flex: 1, minWidth: '280px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: 'var(--graphite)', letterSpacing: '-0.025em', margin: 0 }}>
                 {doc.title}
               </h1>
               <span className="badge badge-gray">{doc.category}</span>
               <span className={`badge ${
-                doc.effective_permission === 'owner' ? 'badge-green' : 'badge-blue'
+                doc.effective_permission === 'owner' ? 'badge-green' : 'badge-copper'
               }`} style={{ textTransform: 'capitalize' }}>
                 {doc.effective_permission === 'owner' ? 'Document Owner' : `${doc.effective_permission} Access`}
               </span>
             </div>
 
-            {doc.description && (
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '700px', lineHeight: 1.5 }}>
+            {doc.description ? (
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '720px', lineHeight: 1.55, margin: 0 }}>
                 {doc.description}
+              </p>
+            ) : (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>
+                No description provided.
               </p>
             )}
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
+          {/* Action Buttons Group */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" onClick={handleOpenPreview}>
-              <Eye size={15} />
+              <Eye size={15} color="var(--copper-dark)" />
               <span>Secure Preview</span>
             </button>
 
             <button className="btn btn-primary" onClick={handleDownload}>
-              <Download size={15} />
+              <Download size={15} color="var(--copper)" />
               <span>Download File</span>
             </button>
 
             {canEdit && (
               <button className="btn btn-secondary" onClick={handleStartEdit}>
-                <Edit3 size={15} />
+                <Edit3 size={15} color="var(--text-secondary)" />
                 <span>Edit Metadata</span>
               </button>
             )}
@@ -351,54 +403,108 @@ export const DocumentDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Security & File Metadata Bar */}
+        {/* Security & File Metadata Grid */}
         <div style={{
           marginTop: '1.5rem',
           paddingTop: '1.25rem',
-          borderTop: '1px solid var(--border-main)',
+          borderTop: '1px solid var(--border)',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '1rem',
-          fontSize: '0.8125rem'
+          fontSize: '0.8125rem',
         }}>
           <div>
-            <span style={{ color: 'var(--text-muted)', display: 'block' }}>Original Filename</span>
-            <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{doc.original_filename}</span>
-          </div>
-
-          <div>
-            <span style={{ color: 'var(--text-muted)', display: 'block' }}>File Size &amp; Type</span>
-            <span style={{ fontWeight: 600 }}>{(doc.file_size / 1024).toFixed(1)} KB ({doc.detected_media_type})</span>
-          </div>
-
-          <div>
-            <span style={{ color: 'var(--text-muted)', display: 'block' }}>SHA-256 Checksum</span>
-            <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.75rem' }} title={doc.checksum}>
-              {doc.checksum.substring(0, 16)}...{doc.checksum.substring(48)}
+            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '0.125rem' }}>
+              Original Filename
+            </span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--graphite)', wordBreak: 'break-all' }}>
+              {doc.original_filename}
             </span>
           </div>
 
           <div>
-            <span style={{ color: 'var(--text-muted)', display: 'block' }}>Document Owner</span>
-            <span style={{ fontWeight: 600 }}>{doc.owner_name} ({doc.owner_email})</span>
+            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '0.125rem' }}>
+              Size &amp; Format
+            </span>
+            <span style={{ fontWeight: 600, color: 'var(--graphite)' }}>
+              {(doc.file_size / 1024).toFixed(1)} KB ({doc.detected_media_type})
+            </span>
+          </div>
+
+          <div>
+            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '0.125rem' }}>
+              SHA-256 Checksum
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span 
+                style={{ 
+                  fontWeight: 600, 
+                  fontFamily: 'var(--font-mono)', 
+                  fontSize: '0.75rem', 
+                  color: 'var(--graphite)',
+                  backgroundColor: 'var(--bg-surface-secondary)',
+                  padding: '0.125rem 0.375rem',
+                  borderRadius: 'var(--radius-xs)',
+                  border: '1px solid var(--border)',
+                }} 
+                title={doc.checksum}
+              >
+                {doc.checksum.substring(0, 10)}...{doc.checksum.substring(54)}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyChecksum}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  color: copiedChecksum ? 'var(--success)' : 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Copy complete SHA-256 Checksum"
+              >
+                {copiedChecksum ? <CheckCircle size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem', marginBottom: '0.125rem' }}>
+              Document Owner
+            </span>
+            <span style={{ fontWeight: 600, color: 'var(--graphite)' }}>
+              {doc.owner_name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({doc.owner_email})</span>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-main)', marginBottom: '1.5rem' }}>
+      {/* ================= REFINED TAB NAVIGATION ================= */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.375rem', 
+        borderBottom: '1px solid var(--border)', 
+        marginBottom: '1.5rem',
+      }}>
         <button
           className="btn btn-sm"
           onClick={() => setActiveTab('permissions')}
           style={{
-            borderBottom: activeTab === 'permissions' ? '2px solid var(--primary)' : '2px solid transparent',
+            borderBottom: activeTab === 'permissions' ? '2px solid var(--copper)' : '2px solid transparent',
             borderRadius: '0',
             padding: '0.625rem 1rem',
             fontWeight: activeTab === 'permissions' ? 600 : 500,
-            color: activeTab === 'permissions' ? 'var(--primary)' : 'var(--text-muted)'
+            color: activeTab === 'permissions' ? 'var(--graphite)' : 'var(--text-secondary)',
+            backgroundColor: activeTab === 'permissions' ? 'rgba(217, 154, 103, 0.08)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.15s ease',
           }}
         >
-          <Users size={16} />
+          <Users size={15} color={activeTab === 'permissions' ? 'var(--copper-dark)' : 'currentColor'} />
           <span>Sharing &amp; Permissions ({permissions?.length || 0})</span>
         </button>
 
@@ -406,14 +512,19 @@ export const DocumentDetailPage: React.FC = () => {
           className="btn btn-sm"
           onClick={() => setActiveTab('ai')}
           style={{
-            borderBottom: activeTab === 'ai' ? '2px solid var(--primary)' : '2px solid transparent',
+            borderBottom: activeTab === 'ai' ? '2px solid var(--copper)' : '2px solid transparent',
             borderRadius: '0',
             padding: '0.625rem 1rem',
             fontWeight: activeTab === 'ai' ? 600 : 500,
-            color: activeTab === 'ai' ? 'var(--primary)' : 'var(--text-muted)'
+            color: activeTab === 'ai' ? 'var(--graphite)' : 'var(--text-secondary)',
+            backgroundColor: activeTab === 'ai' ? 'rgba(217, 154, 103, 0.08)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.15s ease',
           }}
         >
-          <Sparkles size={16} />
+          <Sparkles size={15} color={activeTab === 'ai' ? 'var(--copper-dark)' : 'currentColor'} />
           <span>AI Access Recommendations</span>
         </button>
 
@@ -421,26 +532,34 @@ export const DocumentDetailPage: React.FC = () => {
           className="btn btn-sm"
           onClick={() => setActiveTab('audit')}
           style={{
-            borderBottom: activeTab === 'audit' ? '2px solid var(--primary)' : '2px solid transparent',
+            borderBottom: activeTab === 'audit' ? '2px solid var(--copper)' : '2px solid transparent',
             borderRadius: '0',
             padding: '0.625rem 1rem',
             fontWeight: activeTab === 'audit' ? 600 : 500,
-            color: activeTab === 'audit' ? 'var(--primary)' : 'var(--text-muted)'
+            color: activeTab === 'audit' ? 'var(--graphite)' : 'var(--text-secondary)',
+            backgroundColor: activeTab === 'audit' ? 'rgba(217, 154, 103, 0.08)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.15s ease',
           }}
         >
-          <History size={16} />
+          <History size={15} color={activeTab === 'audit' ? 'var(--copper-dark)' : 'currentColor'} />
           <span>Document Activity Log</span>
         </button>
       </div>
 
-      {/* TAB 1: PERMISSIONS & SHARING */}
+      {/* ================= TAB 1: PERMISSIONS & SHARING ================= */}
       {activeTab === 'permissions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {isOwner && (
             <div className="panel" style={{ padding: '1.25rem' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-                Grant Explicit Access
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Key size={16} color="var(--copper-dark)" />
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                  Grant Explicit Access
+                </h3>
+              </div>
 
               {grantError && (
                 <div style={{
@@ -449,7 +568,8 @@ export const DocumentDetailPage: React.FC = () => {
                   padding: '0.5rem 0.75rem',
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '0.8125rem',
-                  marginBottom: '1rem'
+                  marginBottom: '1rem',
+                  border: '1px solid var(--danger-border)',
                 }}>
                   {grantError}
                 </div>
@@ -473,7 +593,7 @@ export const DocumentDetailPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div style={{ width: '140px' }}>
+                <div style={{ width: '160px' }}>
                   <label className="form-label">Permission Level</label>
                   <select
                     className="input-field"
@@ -485,15 +605,15 @@ export const DocumentDetailPage: React.FC = () => {
                   </select>
                 </div>
 
-                <button type="submit" className="btn btn-primary" style={{ height: '38px' }}>
-                  <Key size={15} />
+                <button type="submit" className="btn btn-primary" style={{ height: '38px', padding: '0 1rem' }}>
+                  <Key size={14} color="var(--copper)" />
                   <span>Grant Access</span>
                 </button>
               </form>
             </div>
           )}
 
-          {/* Active Grants List */}
+          {/* Active Grants Table */}
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -510,15 +630,17 @@ export const DocumentDetailPage: React.FC = () => {
                   permissions.map((p) => (
                     <tr key={p.id}>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{p.user_display_name}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--graphite)' }}>{p.user_display_name}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.user_email}</div>
                       </td>
                       <td>
-                        <span className={`badge ${p.permission_level === 'edit' ? 'badge-blue' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
+                        <span className={`badge ${p.permission_level === 'edit' ? 'badge-copper' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
                           {p.permission_level === 'edit' ? 'Read & Edit' : 'Read Only'}
                         </span>
                       </td>
-                      <td style={{ fontSize: '0.8125rem' }}>{p.granted_by_email || 'Owner'}</td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                        {p.granted_by_email || 'Owner'}
+                      </td>
                       <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                         {formatToIST(p.granted_at)}
                       </td>
@@ -529,7 +651,7 @@ export const DocumentDetailPage: React.FC = () => {
                             onClick={() => handleRevokePermission(p.user_id, p.user_email)}
                             title="Immediate permission revocation"
                           >
-                            <X size={14} />
+                            <X size={13} />
                             <span>Revoke Access</span>
                           </button>
                         </td>
@@ -538,7 +660,7 @@ export const DocumentDetailPage: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={isOwner ? 5 : 4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={isOwner ? 5 : 4} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
                       No explicit permissions have been granted yet. Only the document owner has access.
                     </td>
                   </tr>
@@ -549,17 +671,17 @@ export const DocumentDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: AI ACCESS RECOMMENDATIONS */}
+      {/* ================= TAB 2: AI ACCESS RECOMMENDATIONS ================= */}
       {activeTab === 'ai' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-                  AI-Powered Permission Recommendations
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                  AI-Assisted Access Recommendations
                 </h3>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  Minimum-necessary privilege suggestions based strictly on metadata categories and organizational roles.
+                  Minimum-necessary privilege suggestions based strictly on metadata classification.
                 </p>
               </div>
 
@@ -569,45 +691,45 @@ export const DocumentDetailPage: React.FC = () => {
                   onClick={handleRequestAi}
                   disabled={isAiLoading}
                 >
-                  <Sparkles size={14} />
-                  <span>{isAiLoading ? 'Analyzing Metadata...' : 'Request AI Recommendations'}</span>
+                  <Sparkles size={14} color="var(--copper)" />
+                  <span>{isAiLoading ? 'Analyzing Policy...' : 'Request AI Recommendations'}</span>
                 </button>
               )}
             </div>
 
             {/* AI Security Notice */}
             <div style={{
-              backgroundColor: '#f8fafc',
-              border: '1px solid var(--border-main)',
+              backgroundColor: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)',
               padding: '0.75rem 1rem',
               fontSize: '0.8125rem',
               color: 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem'
+              gap: '0.5rem',
             }}>
-              <Shield size={16} color="var(--accent)" />
+              <Shield size={16} color="var(--copper-dark)" style={{ flexShrink: 0 }} />
               <span>
-                <strong>Zero-Trust AI Guardrail:</strong> AI suggestions are purely advisory. AI has zero capability to alter database permissions directly. Only explicit owner approval will create grants.
+                <strong>Human-in-the-Loop Invariant:</strong> AI suggestions are purely advisory. The model receives zero document file bytes and has zero database write permissions. Only explicit human owner approval can create grants.
               </span>
             </div>
 
             {/* Active AI Suggestions Box */}
             {aiSuggestions.length > 0 && (
-              <div style={{ marginTop: '1.5rem', border: '1px solid var(--border-main)', borderRadius: 'var(--radius-sm)', padding: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ marginTop: '1.5rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '1.25rem', backgroundColor: 'var(--bg-surface)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span 
-                      className="badge badge-blue" 
+                      className="badge badge-copper" 
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
                       title={`Engine: ${aiModel || 'TrustVault Policy Intelligence'}`}
                     >
                       <Sparkles size={13} />
-                      <span>Policy Engine: Enterprise Access Advisor {isMock ? '(Sandbox Mode)' : '(Active)'}</span>
+                      <span>Advisor: Enterprise Policy {isMock ? '(Sandbox)' : '(Active)'}</span>
                     </span>
                     <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      {aiSuggestions.length} candidates proposed
+                      {aiSuggestions.length} candidates suggested
                     </span>
                   </div>
 
@@ -618,7 +740,7 @@ export const DocumentDetailPage: React.FC = () => {
                         <span>Reject All</span>
                       </button>
                       <button className="btn btn-primary btn-sm" onClick={handleApproveAi}>
-                        <Check size={14} />
+                        <Check size={14} color="var(--copper)" />
                         <span>Approve &amp; Grant Access</span>
                       </button>
                     </div>
@@ -626,40 +748,49 @@ export const DocumentDetailPage: React.FC = () => {
                 </div>
 
                 {aiExplanation && (
-                  <div style={{ fontSize: '0.875rem', fontStyle: 'italic', color: 'var(--text-secondary)', marginBottom: '1.25rem', padding: '0.625rem', backgroundColor: '#f1f5f9', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ 
+                    fontSize: '0.8125rem', 
+                    fontStyle: 'italic', 
+                    color: 'var(--text-secondary)', 
+                    marginBottom: '1rem', 
+                    padding: '0.625rem 0.875rem', 
+                    backgroundColor: 'var(--bg-warm)', 
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                  }}>
                     "{aiExplanation}"
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                   {aiSuggestions.map((s, idx) => (
                     <div
                       key={idx}
                       style={{
-                        padding: '0.875rem',
-                        border: '1px solid var(--border-main)',
+                        padding: '0.75rem 1rem',
+                        border: '1px solid var(--border)',
                         borderRadius: 'var(--radius-sm)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        backgroundColor: '#ffffff'
+                        backgroundColor: '#FFFFFF',
                       }}
                     >
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontWeight: 600 }}>{s.display_name}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--graphite)' }}>{s.display_name}</span>
                           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>({s.email})</span>
-                          <span className={`badge ${s.permission_level === 'edit' ? 'badge-blue' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
+                          <span className={`badge ${s.permission_level === 'edit' ? 'badge-copper' : 'badge-green'}`} style={{ textTransform: 'capitalize' }}>
                             Suggested: {s.permission_level}
                           </span>
                         </div>
-                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                        <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.25rem', margin: '0.25rem 0 0' }}>
                           {s.rationale}
                         </p>
                       </div>
 
                       <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           Confidence: {(s.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -672,7 +803,7 @@ export const DocumentDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: AUDIT HISTORY */}
+      {/* ================= TAB 3: AUDIT HISTORY ================= */}
       {activeTab === 'audit' && (
         <div className="table-container">
           <table className="data-table">
@@ -689,13 +820,15 @@ export const DocumentDetailPage: React.FC = () => {
               {auditEvents?.events && auditEvents.events.length > 0 ? (
                 auditEvents.events.map((e) => (
                   <tr key={e.id}>
-                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       {formatToIST(e.timestamp)}
                     </td>
                     <td>
-                      <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{e.action}</span>
+                      <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--graphite)' }}>
+                        {e.action}
+                      </span>
                     </td>
-                    <td style={{ fontSize: '0.8125rem' }}>
+                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                       {e.actor_email || 'System'}
                     </td>
                     <td>
@@ -703,14 +836,14 @@ export const DocumentDetailPage: React.FC = () => {
                         {e.outcome}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                    <td style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }} title={e.event_hash}>
                       {e.event_hash.substring(0, 16)}...
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
                     No activity recorded yet for this document.
                   </td>
                 </tr>
@@ -720,18 +853,25 @@ export const DocumentDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Metadata Modal */}
+      {/* ================= EDIT METADATA MODAL ================= */}
       {isEditingMeta && (
         <div className="modal-overlay" onClick={() => setIsEditingMeta(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Edit Document Metadata</h2>
-              <button onClick={() => setIsEditingMeta(false)}><X size={18} /></button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--graphite)', margin: 0 }}>
+                Edit Document Metadata
+              </h2>
+              <button 
+                onClick={() => setIsEditingMeta(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >
+                <X size={18} />
+              </button>
             </div>
 
             <form onSubmit={handleSaveMeta}>
               <div className="form-group">
-                <label className="form-label">Title</label>
+                <label className="form-label">Document Title</label>
                 <input
                   type="text"
                   className="input-field"
@@ -764,6 +904,7 @@ export const DocumentDetailPage: React.FC = () => {
                   rows={3}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Optional confidential notes or business context..."
                 />
               </div>
 
@@ -780,7 +921,7 @@ export const DocumentDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* SECURE DOCUMENT PREVIEW MODAL WITH FORENSIC WATERMARK */}
+      {/* ================= SECURE FORENSIC PREVIEW MODAL ================= */}
       {isPreviewOpen && (
         <div className="modal-overlay" onClick={handleClosePreview} style={{ zIndex: 9999 }}>
           <div 
@@ -794,28 +935,42 @@ export const DocumentDetailPage: React.FC = () => {
               flexDirection: 'column',
               position: 'relative',
               overflow: 'hidden',
-              padding: '1.25rem'
+              padding: '1.25rem',
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid var(--border-main)', paddingBottom: '0.75rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              marginBottom: '1rem', 
+              borderBottom: '1px solid var(--border)', 
+              paddingBottom: '0.75rem',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                <div style={{ padding: '6px', borderRadius: '4px', backgroundColor: '#0f172a', color: '#38bdf8', display: 'flex', alignItems: 'center' }}>
+                <div style={{ 
+                  padding: '6px', 
+                  borderRadius: 'var(--radius-sm)', 
+                  backgroundColor: 'var(--graphite)', 
+                  color: 'var(--copper)', 
+                  display: 'flex', 
+                  alignItems: 'center',
+                }}>
                   <Shield size={18} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                  <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0, color: 'var(--graphite)' }}>
                     Secure Forensic Preview
                   </h2>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    {doc.original_filename} • {doc.detected_media_type}
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                    {doc.original_filename} &bull; {doc.detected_media_type}
                   </div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <button className="btn btn-primary btn-sm" onClick={handleDownload}>
-                  <Download size={13} />
+                  <Download size={13} color="var(--copper)" />
                   <span>Download</span>
                 </button>
                 <button 
@@ -834,11 +989,11 @@ export const DocumentDetailPage: React.FC = () => {
               minHeight: '420px', 
               maxHeight: '65vh', 
               overflowY: 'auto', 
-              backgroundColor: '#f8fafc', 
+              backgroundColor: 'var(--bg-warm)', 
               borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-main)',
+              border: '1px solid var(--border)',
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
             }}>
               {/* Dynamic Forensic Watermark Layer */}
               <div style={{
@@ -849,18 +1004,18 @@ export const DocumentDetailPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 transform: 'rotate(-25deg)',
-                opacity: 0.09,
+                opacity: 0.08,
                 fontSize: '1.125rem',
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--graphite)',
                 textAlign: 'center',
                 lineHeight: 2,
                 userSelect: 'none',
-                zIndex: 10
+                zIndex: 10,
               }}>
-                CONFIDENTIAL • TRUSTVAULT DLP PROTECTED<br />
+                CONFIDENTIAL &bull; TRUSTVAULT DLP PROTECTED<br />
                 AUTHORIZED ACCESS BY: {user?.email || 'Authenticated User'}<br />
-                FORENSIC TIMESTAMP: {formatToIST(new Date())}
+                FORENSIC TIMESTAMP: {previewTimestamp}
               </div>
 
               {/* Content Renderers */}
@@ -872,11 +1027,11 @@ export const DocumentDetailPage: React.FC = () => {
                 <pre style={{
                   padding: '1.25rem',
                   fontSize: '0.8125rem',
-                  fontFamily: 'monospace',
+                  fontFamily: 'var(--font-mono)',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  color: 'var(--text-main)',
-                  lineHeight: 1.6
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.6,
                 }}>
                   {previewText}
                 </pre>
@@ -913,9 +1068,17 @@ export const DocumentDetailPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <div style={{ 
+              marginTop: '0.75rem', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              fontSize: '0.75rem', 
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)',
+            }}>
               <span>DLP Checksum: {doc.checksum.substring(0, 24)}...</span>
-              <span>Screen capture without authorization violates confidential policy</span>
+              <span style={{ fontFamily: 'var(--font-family)' }}>Screen capture violates organization policy</span>
             </div>
           </div>
         </div>

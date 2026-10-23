@@ -6,25 +6,27 @@ export const PrivacyPage: React.FC = () => {
     <div className="container" style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '4rem' }}>
       <div className="panel" style={{ padding: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <Shield size={28} color="var(--accent)" />
+          <Shield size={28} color="var(--copper-dark)" />
           <div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--graphite)', margin: 0 }}>
               Privacy Policy
             </h1>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
               Effective Date: October 2026 | Document Draft Version 1.0 (Subject to Legal Review)
             </div>
           </div>
         </div>
 
         <div style={{
-          backgroundColor: '#f1f5f9',
-          borderLeft: '4px solid var(--accent)',
+          backgroundColor: 'var(--bg-surface-secondary)',
+          borderLeft: '4px solid var(--copper)',
           padding: '0.875rem 1rem',
           fontSize: '0.8125rem',
           color: 'var(--text-secondary)',
           marginBottom: '2rem',
-          borderRadius: '0 var(--radius-sm) var(--radius-sm) 0'
+          borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+          border: '1px solid var(--border)',
+          borderLeftWidth: '4px',
         }}>
           <strong>Legal Notice:</strong> This privacy policy accurately describes the actual data architecture, storage policies, and AI integration mechanisms of the TrustVault platform. It is provided as a product technical draft and requires final regulatory review before commercial launch.
         </div>

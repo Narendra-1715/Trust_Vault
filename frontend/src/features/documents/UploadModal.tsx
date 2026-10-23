@@ -139,26 +139,35 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
             <div style={{
-              width: '28px',
-              height: '28px',
+              width: '32px',
+              height: '32px',
               borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'var(--accent-light)',
+              backgroundColor: 'var(--graphite)',
+              border: '1px solid var(--border-dark)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--accent)'
+              color: 'var(--copper)',
             }}>
               <Upload size={16} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Upload Confidential Document</h2>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Zero-trust quarantine with client SHA-256 pre-check</div>
+              <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--graphite)', margin: 0 }}>
+                Upload Confidential Document
+              </h2>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Private storage quarantine with client-side SHA-256 pre-check
+              </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+          <button 
+            onClick={onClose} 
+            style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+          >
             <X size={18} />
           </button>
         </div>
@@ -168,13 +177,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
             backgroundColor: 'var(--danger-bg)',
             color: 'var(--danger)',
             border: '1px solid var(--danger-border)',
-            padding: '0.75rem',
+            padding: '0.75rem 1rem',
             borderRadius: 'var(--radius-sm)',
             fontSize: '0.8125rem',
             marginBottom: '1rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem'
+            gap: '0.5rem',
           }}>
             <AlertCircle size={16} />
             <span>{error}</span>
@@ -190,21 +199,21 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
             onDrop={handleDrop}
             style={{
               border: isDragging 
-                ? '2px dashed var(--accent)' 
+                ? '2px dashed var(--copper)' 
                 : file 
-                ? '1px solid var(--border-main)' 
-                : '2px dashed var(--border-main)',
-              borderRadius: 'var(--radius-sm)',
+                ? '1px solid var(--border)' 
+                : '2px dashed var(--border)',
+              borderRadius: 'var(--radius-md)',
               padding: file ? '1.25rem' : '1.75rem 1rem',
               textAlign: 'center',
               cursor: 'pointer',
               backgroundColor: isDragging 
-                ? 'var(--accent-light)' 
+                ? 'var(--copper-light)' 
                 : file 
-                ? '#f8fafc' 
-                : '#ffffff',
+                ? 'var(--bg-surface-secondary)' 
+                : 'var(--bg-warm)',
               transition: 'all 0.15s ease-in-out',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
             }}
           >
             <input 
@@ -223,21 +232,22 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
                       width: '36px',
                       height: '36px',
                       borderRadius: 'var(--radius-sm)',
-                      backgroundColor: 'var(--accent-light)',
+                      backgroundColor: 'var(--copper-light)',
+                      border: '1px solid var(--copper-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: 'var(--accent)',
-                      flexShrink: 0
+                      color: 'var(--copper-dark)',
+                      flexShrink: 0,
                     }}>
                       <FileText size={18} />
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--graphite)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {file.name}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {(file.size / 1024).toFixed(1)} KB • {file.type || 'Binary Data'}
+                        {(file.size / 1024).toFixed(1)} KB &bull; {file.type || 'Binary Data'}
                       </div>
                     </div>
                   </div>
@@ -254,14 +264,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
 
                 {/* Client-Side Cryptographic SHA-256 Pre-Check Badge */}
                 <div style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid var(--border-main)',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-xs)',
                   padding: '0.625rem 0.75rem',
-                  textAlign: 'left'
+                  textAlign: 'left',
                 }}>
                   {isHashing ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--copper-dark)' }}>
                       <RefreshCw size={14} className="spin" />
                       <span>Computing client-side SHA-256 checksum...</span>
                     </div>
@@ -272,18 +282,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
                           <ShieldCheck size={14} />
                           <span>Pre-Upload Integrity Verified</span>
                         </div>
-                        <span className="badge badge-green" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
+                        <span className="badge badge-copper" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>
                           Client SHA-256
                         </span>
                       </div>
                       <div style={{
-                        fontFamily: 'monospace',
+                        fontFamily: 'var(--font-mono)',
                         fontSize: '0.7rem',
                         color: 'var(--text-secondary)',
                         wordBreak: 'break-all',
-                        backgroundColor: '#f1f5f9',
+                        backgroundColor: 'var(--bg-warm)',
                         padding: '0.375rem 0.5rem',
-                        borderRadius: '3px'
+                        borderRadius: '3px',
+                        border: '1px solid var(--border-subtle)',
                       }}>
                         {fileHash}
                       </div>
@@ -302,23 +313,24 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
                   width: '42px',
                   height: '42px',
                   borderRadius: '50%',
-                  backgroundColor: isDragging ? 'var(--accent-light)' : '#f1f5f9',
+                  backgroundColor: isDragging ? 'var(--copper-light)' : 'var(--bg-surface)',
+                  border: `1px solid ${isDragging ? 'var(--copper)' : 'var(--border)'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 0.75rem',
-                  color: isDragging ? 'var(--accent)' : 'var(--text-muted)'
+                  color: isDragging ? 'var(--copper-dark)' : 'var(--text-muted)',
                 }}>
-                  <Upload size={20} />
+                  <Upload size={19} />
                 </div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--graphite)' }}>
                   {isDragging ? 'Drop file to ingest into TrustVault' : 'Drag & drop confidential file here, or browse'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                   Supported: PDF, DOCX, XLSX, TXT, CSV, PNG, JPG (Max 25MB)
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem', marginTop: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  <ShieldCheck size={13} color="var(--success)" />
+                  <ShieldCheck size={13} color="var(--copper-dark)" />
                   <span>Real-time SHA-256 checksum computed in browser before upload</span>
                 </div>
               </div>
@@ -360,7 +372,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Provide context regarding document sensitivity or purpose..."
+              placeholder="Provide context regarding document sensitivity or intended audience..."
             />
           </div>
 
@@ -378,7 +390,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
               className="btn btn-primary"
               disabled={isUploading || !file || isHashing}
             >
-              {isUploading ? 'Encrypting & Ingesting...' : isHashing ? 'Computing Checksum...' : 'Upload Document'}
+              {isUploading ? 'Ingesting to Private Vault...' : isHashing ? 'Computing Checksum...' : 'Upload Document'}
             </button>
           </div>
         </form>
@@ -386,4 +398,3 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
     </div>
   );
 };
-

@@ -65,18 +65,18 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             key={t.id}
             style={{
               pointerEvents: 'auto',
-              backgroundColor: '#0f172a',
-              color: '#f8fafc',
+              backgroundColor: '#242526',
+              color: '#F6F3F0',
               borderRadius: '8px',
               padding: '12px 16px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
-              border: '1px solid #334155',
+              boxShadow: '0 20px 25px -5px rgba(28, 29, 30, 0.4), 0 8px 10px -6px rgba(28, 29, 30, 0.3)',
+              border: '1px solid #48494A',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '12px',
               animation: 'toastSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+              fontFamily: "var(--font-family)",
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
@@ -89,7 +89,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                    backgroundColor: 'rgba(30, 126, 52, 0.2)',
                     flexShrink: 0,
                   }}
                 >
@@ -105,7 +105,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    backgroundColor: 'rgba(197, 48, 48, 0.2)',
                     flexShrink: 0,
                   }}
                 >
@@ -121,11 +121,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    backgroundColor: 'rgba(217, 154, 103, 0.2)',
                     flexShrink: 0,
                   }}
                 >
-                  <Info size={18} color="#3b82f6" strokeWidth={2.4} />
+                  <Info size={18} color="#D99A67" strokeWidth={2.4} />
                 </div>
               )}
               <span
@@ -133,7 +133,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   fontSize: '0.875rem',
                   fontWeight: 500,
                   lineHeight: '1.4',
-                  color: '#f8fafc',
+                  color: '#F6F3F0',
                 }}
               >
                 {t.message}
@@ -146,7 +146,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#94a3b8',
+                color: '#8B8985',
                 padding: '4px',
                 display: 'flex',
                 alignItems: 'center',
@@ -154,8 +154,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 borderRadius: '4px',
                 transition: 'color 0.15s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#8B8985')}
               aria-label="Dismiss notification"
             >
               <X size={14} />

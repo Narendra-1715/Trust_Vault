@@ -13,76 +13,140 @@ export const AppLayout: React.FC = () => {
     navigate('/login');
   };
 
+  const isAuthPage = location.pathname === '/login';
+
+  // For the dedicated two-column login experience
+  if (isAuthPage) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-warm)' }}>
+        <Outlet />
+      </div>
+    );
+  }
+
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {/* Top Enterprise Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'var(--bg-warm)' }}>
+      {/* ================= COMPACT ENTERPRISE HEADER ================= */}
       <header style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.88)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: '1px solid var(--border-main)',
+        backgroundColor: '#FFFFFF',
+        borderBottom: '1px solid var(--border)',
         position: 'sticky',
         top: 0,
         zIndex: 40,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)'
+        boxShadow: 'var(--shadow-sm)',
       }}>
         <div className="container" style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: '4rem'
+          height: '3.75rem',
         }}>
-          {/* Brand */}
+          {/* Brand & Left Navigation */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <Link to={isAuthenticated ? "/documents" : "/"} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontWeight: 700, fontSize: '1.125rem', color: 'var(--primary)' }}>
+            <Link 
+              to={isAuthenticated ? "/documents" : "/"} 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}
+            >
               <div style={{
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                color: '#38bdf8',
-                padding: '0.4rem',
+                width: '32px',
+                height: '32px',
                 borderRadius: 'var(--radius-sm)',
+                backgroundColor: 'var(--graphite)',
+                border: '1px solid var(--border-dark)',
+                color: 'var(--copper)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.15)'
+                boxShadow: 'var(--shadow-sm)',
+                flexShrink: 0,
               }}>
-                <Shield size={20} strokeWidth={2.2} />
+                <Shield size={17} strokeWidth={2.2} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ letterSpacing: '-0.02em', lineHeight: 1.1 }}>TrustVault</span>
-                <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Confidential Core</span>
+                <span style={{ 
+                  fontSize: '1rem', 
+                  fontWeight: 700, 
+                  letterSpacing: '-0.02em', 
+                  color: 'var(--graphite)',
+                  lineHeight: 1.15,
+                }}>
+                  TrustVault
+                </span>
+                <span style={{ 
+                  fontSize: '0.5625rem', 
+                  color: 'var(--copper-dark)', 
+                  fontWeight: 700, 
+                  letterSpacing: '0.06em', 
+                  textTransform: 'uppercase',
+                }}>
+                  Confidential Core
+                </span>
               </div>
             </Link>
 
-            {/* Main Navigation */}
+            {/* Main Navigation Links */}
             {isAuthenticated && (
-              <nav style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <nav style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                 <Link
                   to="/documents"
-                  className={`btn btn-sm ${isActive('/documents') ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ border: isActive('/documents') ? 'none' : '1px solid transparent' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                    padding: '0.375rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: isActive('/documents') ? 600 : 500,
+                    color: isActive('/documents') ? 'var(--graphite)' : 'var(--text-secondary)',
+                    backgroundColor: isActive('/documents') ? 'var(--copper-light)' : 'transparent',
+                    border: `1px solid ${isActive('/documents') ? 'var(--copper-border)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
-                  <FileText size={16} />
+                  <FileText size={15} color={isActive('/documents') ? 'var(--copper-dark)' : 'currentColor'} />
                   <span>Documents</span>
                 </Link>
 
                 <Link
                   to="/audit"
-                  className={`btn btn-sm ${isActive('/audit') ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ border: isActive('/audit') ? 'none' : '1px solid transparent' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                    padding: '0.375rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: isActive('/audit') ? 600 : 500,
+                    color: isActive('/audit') ? 'var(--graphite)' : 'var(--text-secondary)',
+                    backgroundColor: isActive('/audit') ? 'var(--copper-light)' : 'transparent',
+                    border: `1px solid ${isActive('/audit') ? 'var(--copper-border)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
-                  <Activity size={16} />
+                  <Activity size={15} color={isActive('/audit') ? 'var(--copper-dark)' : 'currentColor'} />
                   <span>Audit Trail</span>
                 </Link>
 
                 {user?.role === 'admin' && (
                   <Link
                     to="/admin"
-                    className={`btn btn-sm ${isActive('/admin') ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ border: isActive('/admin') ? 'none' : '1px solid transparent' }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.375rem',
+                      padding: '0.375rem 0.75rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: isActive('/admin') ? 600 : 500,
+                      color: isActive('/admin') ? 'var(--graphite)' : 'var(--text-secondary)',
+                      backgroundColor: isActive('/admin') ? 'var(--copper-light)' : 'transparent',
+                      border: `1px solid ${isActive('/admin') ? 'var(--copper-border)' : 'transparent'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      transition: 'all 0.15s ease',
+                    }}
                   >
-                    <Users size={16} />
+                    <Users size={15} color={isActive('/admin') ? 'var(--copper-dark)' : 'currentColor'} />
                     <span>Admin</span>
                   </Link>
                 )}
@@ -90,32 +154,22 @@ export const AppLayout: React.FC = () => {
             )}
           </div>
 
-          {/* Right Controls */}
+          {/* Right Controls: User Profile & Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {isAuthenticated ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-                <div style={{
-                  display: 'none',
-                  alignItems: 'center',
-                  gap: '0.375rem',
-                  padding: '0.2rem 0.5rem',
-                  borderRadius: '12px',
-                  backgroundColor: 'var(--success-bg)',
-                  border: '1px solid var(--success-border)',
-                  fontSize: '0.6875rem',
-                  fontWeight: 600,
-                  color: 'var(--success)'
-                }}>
-                  <span className="pulse-dot" style={{ backgroundColor: 'var(--success)' }}></span>
-                  <span>Zero-Trust Active</span>
-                </div>
-
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{user?.display_name}</span>
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {user?.display_name}
+                  </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', justifyContent: 'flex-end' }}>
                     <span className={`badge ${
-                      user?.role === 'admin' ? 'badge-blue' : user?.role === 'owner' ? 'badge-green' : 'badge-gray'
-                    }`} style={{ textTransform: 'uppercase', fontSize: '0.6875rem' }}>
+                      user?.role === 'admin' 
+                        ? 'badge-copper' 
+                        : user?.role === 'owner' 
+                        ? 'badge-green' 
+                        : 'badge-gray'
+                    }`} style={{ textTransform: 'uppercase', fontSize: '0.625rem', padding: '0.1rem 0.4rem' }}>
                       {user?.role}
                     </span>
                   </div>
@@ -125,15 +179,16 @@ export const AppLayout: React.FC = () => {
                   onClick={handleSignOut}
                   className="btn btn-secondary btn-sm"
                   title="Sign out of TrustVault"
+                  style={{ gap: '0.375rem', padding: '0.35rem 0.625rem' }}
                 >
-                  <LogOut size={15} />
+                  <LogOut size={14} color="var(--text-secondary)" />
                   <span>Sign out</span>
                 </button>
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Link to="/login" className="btn btn-primary btn-sm">
-                  <Lock size={15} />
+                <Link to="/login" className="btn btn-primary btn-sm" style={{ gap: '0.375rem' }}>
+                  <Lock size={14} />
                   <span>Sign in</span>
                 </Link>
               </div>
@@ -142,18 +197,18 @@ export const AppLayout: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* ================= MAIN CONTENT ================= */}
       <main style={{ flex: 1, padding: '2rem 0' }}>
         <Outlet />
       </main>
 
-      {/* Footer */}
+      {/* ================= CORPORATE FOOTER ================= */}
       <footer style={{
-        backgroundColor: '#ffffff',
-        borderTop: '1px solid var(--border-main)',
-        padding: '1.5rem 0',
+        backgroundColor: '#FFFFFF',
+        borderTop: '1px solid var(--border)',
+        padding: '1.25rem 0',
         fontSize: '0.8125rem',
-        color: 'var(--text-muted)'
+        color: 'var(--text-muted)',
       }}>
         <div className="container" style={{
           display: 'flex',
@@ -161,14 +216,20 @@ export const AppLayout: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '1rem'
+          gap: '1rem',
         }}>
-          <div>
-            <span>TrustVault Confidential Workspace &copy; 2026. Security-First Architecture.</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 600, color: 'var(--graphite)' }}>TrustVault</span>
+            <span>&bull;</span>
+            <span>Confidential Document Security Architecture &copy; 2026.</span>
           </div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            <Link to="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>Privacy Policy</Link>
-            <Link to="/terms" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>Terms &amp; Conditions</Link>
+          <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.75rem' }}>
+            <Link to="/privacy" style={{ color: 'var(--text-secondary)' }} className="hover:underline">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" style={{ color: 'var(--text-secondary)' }} className="hover:underline">
+              Terms &amp; Conditions
+            </Link>
           </div>
         </div>
       </footer>

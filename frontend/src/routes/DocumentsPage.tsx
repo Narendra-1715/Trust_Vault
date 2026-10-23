@@ -45,167 +45,206 @@ export const DocumentsPage: React.FC = () => {
 
   return (
     <div className="container">
-      {/* Top Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      {/* ================= TOP PAGE HEADER ================= */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '1.5rem',
+        flexWrap: 'wrap',
+        gap: '1rem',
+      }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-            Confidential Documents
+          <div style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            color: 'var(--copper-dark)',
+            letterSpacing: '0.06em',
+            marginBottom: '0.25rem',
+          }}>
+            Confidential Document Repository
+          </div>
+          <h1 style={{
+            fontSize: '1.625rem',
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
+            color: 'var(--graphite)',
+            margin: 0,
+          }}>
+            Protected Documents
           </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Authorized document repository with strict row-level access control.
+          <p style={{
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary)',
+            marginTop: '0.25rem',
+            margin: '0.25rem 0 0',
+          }}>
+            Strict row-level access control with live stream authorization and cryptographic auditing.
           </p>
         </div>
 
         <button
           className="btn btn-primary"
           onClick={() => setIsUploadOpen(true)}
+          style={{ padding: '0.5625rem 1rem' }}
         >
-          <Plus size={16} />
+          <Plus size={16} color="var(--copper)" />
           <span>Upload Document</span>
         </button>
       </div>
 
-      {/* Enterprise Security Metrics Bar */}
+      {/* ================= METRICS STATUS STRIP ================= */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '0.875rem',
-        marginBottom: '1.5rem'
+        marginBottom: '1.5rem',
       }}>
-        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div className="panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           <div style={{
             width: '38px',
             height: '38px',
             borderRadius: 'var(--radius-sm)',
-            backgroundColor: 'var(--accent-light)',
+            backgroundColor: 'var(--copper-light)',
+            border: '1px solid var(--copper-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--accent)',
-            flexShrink: 0
+            color: 'var(--copper-dark)',
+            flexShrink: 0,
           }}>
-            <FileText size={20} />
+            <FileText size={19} />
           </div>
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
-              Confidential Assets
+            <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Authorized Assets
             </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2 }}>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--graphite)', lineHeight: 1.2 }}>
               {isLoading ? '...' : (data?.documents?.length ?? 0)}
             </div>
             <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Authorized in your scope
+              Accessible in active scope
             </div>
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div className="panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           <div style={{
             width: '38px',
             height: '38px',
             borderRadius: 'var(--radius-sm)',
             backgroundColor: 'var(--success-bg)',
+            border: '1px solid var(--success-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'var(--success)',
-            flexShrink: 0
+            flexShrink: 0,
           }}>
-            <ShieldCheck size={20} />
+            <ShieldCheck size={19} />
           </div>
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
-              Access Enforcement
+            <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Access Policy
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--graphite)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
               <span>Zero-Trust RLS</span>
-              <span className="badge badge-green" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Enforced</span>
+              <span className="badge badge-green" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>Enforced</span>
             </div>
             <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Strict owner & tenant bounds
+              Server evaluates live on every request
             </div>
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div className="panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           <div style={{
             width: '38px',
             height: '38px',
             borderRadius: 'var(--radius-sm)',
             backgroundColor: 'var(--bg-surface-secondary)',
+            border: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--text-main)',
-            flexShrink: 0
+            color: 'var(--graphite)',
+            flexShrink: 0,
           }}>
-            <Database size={20} />
+            <Database size={19} />
           </div>
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
-              Ledger Provenance
+            <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Audit Ledger
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--graphite)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
               <span>SHA-256 Chained</span>
-              <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Immutable</span>
+              <span className="badge badge-copper" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>Verified</span>
             </div>
             <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Deterministic tamper audit
+              Tamper-evident canonical JSON
             </div>
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '0.875rem 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div className="panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           <div style={{
             width: '38px',
             height: '38px',
             borderRadius: 'var(--radius-sm)',
             backgroundColor: 'var(--bg-surface-secondary)',
+            border: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--primary)',
-            flexShrink: 0
+            color: 'var(--graphite)',
+            flexShrink: 0,
           }}>
-            <Lock size={20} />
+            <Lock size={19} />
           </div>
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
-              Data Loss Prevention
+            <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Storage Security
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-              <span>Forensic DLP</span>
-              <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Active</span>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--graphite)', lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span>Private Vault</span>
+              <span className="badge badge-gray" style={{ fontSize: '0.625rem', padding: '0.1rem 0.35rem' }}>Isolated</span>
             </div>
             <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Dynamic watermark tracking
+              Opaque UUID keys outside web root
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="panel" style={{ padding: '0.875rem 1rem', marginBottom: '1.5rem' }}>
+      {/* ================= SEARCH & FILTER CONTROLS ================= */}
+      <div className="panel" style={{ padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '240px' }}>
             <Search size={16} color="var(--text-muted)" />
             <input
               type="text"
-              className="input-field"
-              placeholder="Search documents by title or description..."
+              placeholder="Search documents by title or original filename..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ border: 'none', padding: '0.25rem 0', boxShadow: 'none' }}
+              style={{
+                border: 'none',
+                outline: 'none',
+                width: '100%',
+                fontSize: '0.875rem',
+                backgroundColor: 'transparent',
+                color: 'var(--text-primary)',
+              }}
             />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Filter size={15} color="var(--text-muted)" />
+            <Filter size={14} color="var(--text-muted)" />
             <select
               className="input-field"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{ width: 'auto', padding: '0.375rem 0.75rem' }}
+              style={{ width: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}
             >
               <option value="all">All Categories</option>
               <option value="Financial">Financial</option>
@@ -219,22 +258,25 @@ export const DocumentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Documents Table */}
+      {/* ================= DOCUMENTS TABLE ================= */}
       {isLoading ? (
-        <div className="panel" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          <div>Loading authorized documents...</div>
+        <div className="panel" style={{ textAlign: 'center', padding: '3.5rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+            <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '10px', height: '10px' }}></span>
+            <span style={{ fontSize: '0.875rem' }}>Loading authorized documents...</span>
+          </div>
         </div>
       ) : data?.documents && data.documents.length > 0 ? (
         <div className="table-container">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Category</th>
+                <th style={{ width: '35%' }}>Document</th>
+                <th>Classification</th>
                 <th>Owner</th>
-                <th>Size</th>
+                <th>File Size</th>
                 <th>Uploaded</th>
-                <th>Access Level</th>
+                <th>Your Access</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -244,12 +286,18 @@ export const DocumentsPage: React.FC = () => {
                   <td>
                     <Link
                       to={`/documents/${doc.id}`}
-                      style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                      style={{
+                        fontWeight: 600,
+                        color: 'var(--graphite)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
                     >
-                      <FileText size={16} color="var(--accent)" />
+                      <FileText size={16} color="var(--copper-dark)" />
                       <span>{doc.title}</span>
                     </Link>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem', fontFamily: 'var(--font-mono)' }}>
                       {doc.original_filename}
                     </div>
                   </td>
@@ -257,10 +305,14 @@ export const DocumentsPage: React.FC = () => {
                     <span className="badge badge-gray">{doc.category}</span>
                   </td>
                   <td>
-                    <div style={{ fontSize: '0.8125rem', fontWeight: 500 }}>{doc.owner_name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{doc.owner_email}</div>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                      {doc.owner_name}
+                    </div>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                      {doc.owner_email}
+                    </div>
                   </td>
-                  <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                  <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                     {formatFileSize(doc.file_size)}
                   </td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -271,20 +323,20 @@ export const DocumentsPage: React.FC = () => {
                       doc.effective_permission === 'owner' 
                         ? 'badge-green' 
                         : doc.effective_permission === 'edit'
-                        ? 'badge-blue'
+                        ? 'badge-copper'
                         : 'badge-gray'
                     }`} style={{ textTransform: 'capitalize' }}>
                       {doc.effective_permission === 'owner' ? 'Owner' : `${doc.effective_permission} Access`}
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
                       <Link
                         to={`/documents/${doc.id}`}
                         className="btn btn-secondary btn-sm"
                         title="View details & sharing settings"
                       >
-                        <Eye size={14} />
+                        <Eye size={13} color="var(--text-secondary)" />
                         <span>View</span>
                       </Link>
 
@@ -294,7 +346,7 @@ export const DocumentsPage: React.FC = () => {
                         disabled={downloadingId === doc.id}
                         title="Stream authorized file"
                       >
-                        <Download size={14} />
+                        <Download size={13} color="var(--text-secondary)" />
                         <span>{downloadingId === doc.id ? 'Streaming...' : 'Download'}</span>
                       </button>
                     </div>
@@ -305,26 +357,37 @@ export const DocumentsPage: React.FC = () => {
           </table>
         </div>
       ) : (
-        <div className="panel" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-          <div style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            <Lock size={32} style={{ margin: '0 auto' }} />
+        <div className="panel" style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--bg-surface-secondary)',
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-muted)',
+            margin: '0 auto 1rem',
+          }}>
+            <Lock size={24} />
           </div>
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
+          <h3 style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--graphite)', marginBottom: '0.375rem' }}>
             No authorized documents found
           </h3>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto 1.25rem' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1.5rem', lineHeight: 1.5 }}>
             {searchTerm || selectedCategory !== 'all'
-              ? 'No documents matched your search filter.'
+              ? 'No documents matched your search filter in your authorized scope.'
               : 'You have not uploaded any documents and no other document owners have granted you access yet.'}
           </p>
-          <button className="btn btn-primary btn-sm" onClick={() => setIsUploadOpen(true)}>
-            <Plus size={14} />
+          <button className="btn btn-primary" onClick={() => setIsUploadOpen(true)}>
+            <Plus size={15} color="var(--copper)" />
             <span>Upload your first document</span>
           </button>
         </div>
       )}
 
-      {/* Upload Modal */}
+      {/* ================= UPLOAD MODAL ================= */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}

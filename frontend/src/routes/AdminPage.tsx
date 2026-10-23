@@ -58,9 +58,24 @@ export const AdminPage: React.FC = () => {
     return (
       <div className="container" style={{ padding: '4rem 0', textAlign: 'center' }}>
         <div className="panel" style={{ maxWidth: '480px', margin: '0 auto', padding: '2.5rem' }}>
-          <Lock size={36} color="var(--danger)" style={{ margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Access Restricted</h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'var(--danger-bg)',
+            border: '1px solid var(--danger-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--danger)',
+            margin: '0 auto 1rem',
+          }}>
+            <Lock size={22} />
+          </div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--graphite)', marginBottom: '0.5rem' }}>
+            Access Restricted
+          </h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
             Administrative privilege required to view the security operations console.
           </p>
         </div>
@@ -80,11 +95,21 @@ export const AdminPage: React.FC = () => {
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-            Security Administration Console
+          <div style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            color: 'var(--copper-dark)',
+            letterSpacing: '0.06em',
+            marginBottom: '0.25rem',
+          }}>
+            System Operational Console
+          </div>
+          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--graphite)', margin: 0 }}>
+            Security Administration
           </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            System configuration, user role management, and cryptographic audit monitoring.
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem', margin: '0.25rem 0 0' }}>
+            User management, operational directory inspection, and cryptographic audit ledger verification.
           </p>
         </div>
 
@@ -92,9 +117,10 @@ export const AdminPage: React.FC = () => {
           className="btn btn-primary"
           onClick={() => verifyMutation.mutate()}
           disabled={verifyMutation.isPending}
+          style={{ padding: '0.5625rem 1rem' }}
         >
-          <RefreshCw size={15} />
-          <span>{verifyMutation.isPending ? 'Verifying...' : 'Verify Cryptographic Audit Chain'}</span>
+          <RefreshCw size={15} color="var(--copper)" className={verifyMutation.isPending ? 'spin' : ''} />
+          <span>{verifyMutation.isPending ? 'Verifying Chain...' : 'Verify Cryptographic Audit Chain'}</span>
         </button>
       </div>
 
@@ -103,24 +129,25 @@ export const AdminPage: React.FC = () => {
         <div style={{
           backgroundColor: verificationReport.is_valid ? 'var(--success-bg)' : 'var(--danger-bg)',
           border: `1px solid ${verificationReport.is_valid ? 'var(--success-border)' : 'var(--danger-border)'}`,
-          borderRadius: 'var(--radius-md)',
-          padding: '1.25rem',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1.25rem 1.5rem',
           marginBottom: '1.75rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '1rem'
+          gap: '1rem',
+          boxShadow: 'var(--shadow-sm)',
         }}>
           {verificationReport.is_valid ? (
-            <CheckCircle size={22} style={{ color: 'var(--success)' }} />
+            <CheckCircle size={22} style={{ color: 'var(--success)', flexShrink: 0 }} />
           ) : (
-            <AlertTriangle size={22} style={{ color: 'var(--danger)' }} />
+            <AlertTriangle size={22} style={{ color: 'var(--danger)', flexShrink: 0 }} />
           )}
 
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: verificationReport.is_valid ? 'var(--success)' : 'var(--danger)' }}>
               {verificationReport.is_valid ? 'Audit Hash Chain Verified' : 'Integrity Failure Detected'}
             </div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', marginTop: '0.125rem' }}>
               Total consecutive events checked: {verificationReport.total_events}. All cryptographic hashes match.
             </div>
           </div>
@@ -130,55 +157,77 @@ export const AdminPage: React.FC = () => {
       {/* Real Real-Time Metric Panels */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         <div className="panel" style={{ padding: '1.25rem' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>Total Registered Users</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '0.25rem' }}>{totalUsers}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: '0.25rem' }}>{activeUsers} active accounts</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Registered Users
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--graphite)', marginTop: '0.25rem' }}>
+            {totalUsers}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: '0.25rem', fontWeight: 500 }}>
+            {activeUsers} active accounts
+          </div>
         </div>
 
         <div className="panel" style={{ padding: '1.25rem' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>Confidential Documents</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '0.25rem' }}>{totalDocs}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Stored in private storage</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Vault Documents
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--graphite)', marginTop: '0.25rem' }}>
+            {totalDocs}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+            Stored in private vault
+          </div>
         </div>
 
         <div className="panel" style={{ padding: '1.25rem' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>Logged Audit Events</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '0.25rem' }}>{totalAuditEvents}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>SHA-256 chained</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Logged Audit Events
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--graphite)', marginTop: '0.25rem' }}>
+            {totalAuditEvents}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--copper-dark)', marginTop: '0.25rem', fontWeight: 500 }}>
+            SHA-256 hash chained
+          </div>
         </div>
 
         <div className="panel" style={{ padding: '1.25rem' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>Denied Access Attempts</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: deniedAttempts > 0 ? 'var(--danger)' : 'var(--text-main)', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Refused Access Probes
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: deniedAttempts > 0 ? 'var(--danger)' : 'var(--graphite)', marginTop: '0.25rem' }}>
             {deniedAttempts}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Logged &amp; prevented</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+            Logged &amp; prevented by policy
+          </div>
         </div>
       </div>
 
       {/* User and Role Management Section */}
       <div style={{ marginBottom: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-          User &amp; Global Role Management
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--graphite)', marginBottom: '0.75rem' }}>
+          User Directory &amp; Scope Assignments
         </h2>
 
         <div className="table-container">
           <table className="data-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Role</th>
+                <th>User Identity</th>
+                <th>Role Assignment</th>
                 <th>Status</th>
-                <th>Created</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th>Enrolled Date</th>
+                <th style={{ textAlign: 'right' }}>Security Action</th>
               </tr>
             </thead>
             <tbody>
               {allUsers?.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{u.display_name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--graphite)' }}>{u.display_name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{u.email}</div>
                   </td>
                   <td>
                     <select

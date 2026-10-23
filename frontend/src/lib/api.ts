@@ -163,7 +163,9 @@ export const api = {
       try {
         const errData = await response.json();
         if (errData.detail) errorMsg = errData.detail;
-      } catch (_) {}
+      } catch {
+        /* ignore parse error */
+      }
       throw new ApiError(errorMsg, response.status);
     }
 
@@ -194,7 +196,9 @@ export const api = {
       try {
         const errData = await response.json();
         if (errData.detail) errorMsg = errData.detail;
-      } catch (_) {}
+      } catch {
+        /* ignore parse error */
+      }
       throw new ApiError(errorMsg, response.status);
     }
 
