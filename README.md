@@ -346,20 +346,40 @@ chmod +x scripts/deploy.sh
 
 ### Production Environment Variables
 
-| Variable | Description | Recommended Production Setting |
+| Variable | Description | Recommended Setting |
 | :--- | :--- | :--- |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://user:pass@host:5432/dbname` |
 | `SECRET_KEY` | JWT signing secret | 64-character cryptographically random string |
-| `STORAGE_DIR` | Private storage path | Dedicated persistent volume outside web root |
-| `AI_PROVIDER` | Active AI provider adapter | `gemini` (or `mock` for air-gapped environments) |
-| `AI_MODEL` | Google GenAI model | `gemini-3.8-flash` |
+| `STORAGE_BACKEND` | Storage provider adapter | `s3` (for cloud persistence) or `local` (filesystem volume) |
+| `STORAGE_DIR` | Private filesystem storage path | `/data/vault_storage` (when using persistent disk) |
+| `S3_ENDPOINT_URL` | S3-compatible API endpoint | `https://<ref>.supabase.co/storage/v1/s3` or Cloudflare R2 |
+| `S3_BUCKET_NAME` | Private S3 bucket name | `trustvault-storage` |
+| `S3_ACCESS_KEY_ID` | S3 access key ID | Secret manager / environment variable |
+| `S3_SECRET_ACCESS_KEY` | S3 secret access key | Secret manager / environment variable |
+| `S3_REGION_NAME` | S3 bucket region | `us-east-1` |
+| `AI_PROVIDER` | Active AI provider adapter | `mock` (for offline tests) or `gemini` (live Google GenAI) |
+| `AI_MODEL` | Google GenAI model | `gemini-2.5-flash` |
 | `GEMINI_API_KEY` | Google Gemini API key | Stored in backend secrets manager |
-| `ENVIRONMENT` | Operational environment | `production` |
+| `ENVIRONMENT` | Operational environment | `production` (enforces strict security constraints) |
 | `DEBUG` | FastAPI debugging flag | `false` |
 
 ---
 
 ## 11. Development Fixtures & Demonstration Script
+
+For the complete 5-minute presentation script and step-by-step judge walkthrough, see [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
+
+### Automated 1-Command Hackathon Demonstration
+
+Run the automated 10-step verification against the live cloud deployment or local staging:
+
+```bash
+# Against Live Deployed API:
+python backend/scripts/demo_hackathon.py --live
+
+# Against Local Staging:
+python backend/scripts/demo_hackathon.py
+```
 
 ### Demo Accounts
 

@@ -18,6 +18,7 @@ This document maps all non-negotiable security requirements, enterprise controls
 | **AUTH-08** | Manipulate role in request body / frontend | `app/api/v1/auth.py` server-enforced role assignment | Roles validated against allowed enum (`owner`, `viewer`) | **VERIFIED PASS** |
 | **AUTH-09** | Use expired session or tampered JWT token | `app/core/security.py::decode_access_token` | `test_auth.py::test_tampered_bearer_token_rejected` | **VERIFIED PASS** |
 | **AUTH-10** | Access admin endpoints as viewer | `app/api/deps.py::get_current_admin` (`403 Forbidden`) | Verified via role gate in `app/api/v1/admin.py` | **VERIFIED PASS** |
+| **AUTH-11** | Register as admin via public API | `app/schemas/user.py` regex `^(owner\|viewer)$` + `auth.py` guard | `test_auth.py::test_admin_self_registration_rejected` | **VERIFIED PASS** |
 
 ---
 
@@ -37,6 +38,8 @@ This document maps all non-negotiable security requirements, enterprise controls
 | **DOC-10** | Search by title, owner, category, date | `app/api/v1/documents.py::list_documents` with parameterized filters | SQL queries executed safely with parameterized ILIKE | **VERIFIED PASS** |
 | **DOC-11** | Search for another user's private document | Row-level security subquery filters out unauthorized documents | `test_authorization.py::test_search_never_reveals_unauthorized_documents` | **VERIFIED PASS** |
 | **DOC-12** | Guess storage path directly | Private storage stored in `./data/vault_storage` outside web root | Direct web access impossible; served only via authenticated stream | **VERIFIED PASS** |
+| **DOC-13** | Detect storage file corruption before streaming | `app/api/v1/documents.py` pre-stream SHA-256 validation | `test_authorization.py::test_storage_checksum_corruption_detection` | **VERIFIED PASS** |
+| **DOC-14** | Fail-fast S3 initialization without silent fallback | `app/storage/local.py::init_storage_service` | `test_storage_fail_safe.py::test_s3_storage_fails_fast_without_silent_fallback` | **VERIFIED PASS** |
 
 ---
 
@@ -58,6 +61,7 @@ This document maps all non-negotiable security requirements, enterprise controls
 | **PERM-12** | Owner revokes Viewer A's access | `app/api/v1/permissions.py::revoke_permission` (`revoked_at` timestamp) | `test_revocation.py` step 5 | **VERIFIED PASS** |
 | **PERM-13** | Viewer A attempts read after revocation | Live database query checks `revoked_at IS NULL` | `test_revocation.py` step 6 (immediately returns 404) | **VERIFIED PASS** |
 | **PERM-14** | Viewer A attempts download after revocation | Live database check in `download_document` | `test_revocation.py` step 6 (immediately returns 404) | **VERIFIED PASS** |
+| **PERM-15** | Peer owner lateral isolation in same company | `AuthorizationPolicy.require_read` (returns 404 Not Found) | `test_authorization.py::test_peer_owner_isolation_in_same_organization` | **VERIFIED PASS** |
 | **PERM-15** | Viewer A reuses copied download URL | No static URLs exist; every stream requires live Bearer auth | 404 Not Found returned on subsequent call | **VERIFIED PASS** |
 | **PERM-16** | IDOR parameter tampering in API request | Server-side authorization check per request | `test_cross_user_read_isolation_returns_404` | **VERIFIED PASS** |
 | **PERM-17** | Manipulate role in request payload | Roles verified from DB JWT identity, not request body | Role claims checked against DB row | **VERIFIED PASS** |

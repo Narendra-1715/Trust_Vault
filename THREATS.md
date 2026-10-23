@@ -163,5 +163,6 @@ flowchart TD
 | **TH-06** | Audit Ledger Tampering | High | SHA-256 canonical hash chain verification | `test_tampering_event_payload_detected` |
 | **TH-07** | Brute-force Login | Medium | Argon2id + IP sliding window rate limiter | `test_invalid_password_rejected_with_generic_message` |
 | **TH-08** | Client Role Manipulation | High | Token verified on server; live DB lookup | `test_tampered_bearer_token_rejected` |
-| **TH-09** | Ephemeral File Desync | Medium | Automated fixture recovery on startup | `verify_e2e_journeys.py` |
-| **TH-10** | Offline Data Exfiltration | Low | Forensic dynamic watermark overlay | Frontend preview verification |
+| **TH-09** | Ephemeral File Desync / Data Loss | Critical | S3 object persistence + anti-concealment truthful 500 error | `test_missing_storage_file_fails_safely_without_silent_fabrication` |
+| **TH-10** | Offline Data Exfiltration | Low | Forensic dynamic watermark overlay (visual deterrent) | Frontend preview verification |
+| **TH-11** | Storage Engine Split-Brain | High | Fail-fast initialization; zero silent fallback from S3 to local | `test_s3_storage_fails_fast_without_silent_fallback` |
