@@ -38,6 +38,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     fetchProfile();
+
+    // Active session heartbeat: verify session validity every 15s and on window focus
+    const checkSession = async () => {
+      const token = getAuthToken();
+      if (!token) return;
+      try {
+        await api.getCurrentUser();
+      } catch (err: any) {
+        if (err?.statusCode === 401 || err?.status === 401) {
+          clearAuthToken();
+          setUser(null);
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+            window.location.href = '/login?expired=true';
+          }
+        }
+      }
+    };
+
+    const interval = setInterval(checkSession, 15000);
+    window.addEventListener('focus', checkSession);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkSession);
+    };
   }, []);
 
   const login = async (email: string, pass: string) => {

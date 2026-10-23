@@ -189,8 +189,15 @@ export const api = {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
-        throw new ApiError('Document not found or access has been revoked.', 404);
+      if (response.status === 401) {
+        clearAuthToken();
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login?expired=true';
+        }
+        throw new ApiError('Session expired. Please sign in again.', 401);
+      }
+      if (response.status === 404 || response.status === 403) {
+        throw new ApiError('Document not found or access has been revoked/expired.', response.status);
       }
       let errorMsg = 'Failed to download document';
       try {
@@ -222,8 +229,15 @@ export const api = {
     });
 
     if (!response.ok) {
-      if (response.status === 404) {
-        throw new ApiError('Document not found or access has been revoked.', 404);
+      if (response.status === 401) {
+        clearAuthToken();
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login?expired=true';
+        }
+        throw new ApiError('Session expired. Please sign in again.', 401);
+      }
+      if (response.status === 404 || response.status === 403) {
+        throw new ApiError('Document not found or access has been revoked/expired.', response.status);
       }
       let errorMsg = 'Failed to fetch document content for preview';
       try {
