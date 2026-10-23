@@ -19,11 +19,14 @@ export const AppLayout: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* Top Enterprise Header */}
       <header style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: 'rgba(255, 255, 255, 0.88)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--border-main)',
         position: 'sticky',
         top: 0,
-        zIndex: 40
+        zIndex: 40,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)'
       }}>
         <div className="container" style={{
           display: 'flex',
@@ -35,17 +38,21 @@ export const AppLayout: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
             <Link to={isAuthenticated ? "/documents" : "/"} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontWeight: 700, fontSize: '1.125rem', color: 'var(--primary)' }}>
               <div style={{
-                backgroundColor: '#0f172a',
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
                 color: '#38bdf8',
-                padding: '0.375rem',
+                padding: '0.4rem',
                 borderRadius: 'var(--radius-sm)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.15)'
               }}>
                 <Shield size={20} strokeWidth={2.2} />
               </div>
-              <span style={{ letterSpacing: '-0.02em' }}>TrustVault</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ letterSpacing: '-0.02em', lineHeight: 1.1 }}>TrustVault</span>
+                <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Confidential Core</span>
+              </div>
             </Link>
 
             {/* Main Navigation */}
@@ -86,7 +93,23 @@ export const AppLayout: React.FC = () => {
           {/* Right Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {isAuthenticated ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                <div style={{
+                  display: 'none',
+                  alignItems: 'center',
+                  gap: '0.375rem',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--success-bg)',
+                  border: '1px solid var(--success-border)',
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: 'var(--success)'
+                }}>
+                  <span className="pulse-dot" style={{ backgroundColor: 'var(--success)' }}></span>
+                  <span>Zero-Trust Active</span>
+                </div>
+
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
                   <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{user?.display_name}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', justifyContent: 'flex-end' }}>
