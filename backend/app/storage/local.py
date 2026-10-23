@@ -100,16 +100,34 @@ class LocalPrivateStorage(BaseStorageAdapter):
                 hasher.update(chunk)
         return hasher.hexdigest()
 
-if settings.STORAGE_BACKEND == "s3" and settings.S3_BUCKET_NAME:
-    try:
-        from app.storage.s3 import S3StorageAdapter
-        storage_service = S3StorageAdapter()
-        print(f"[TrustVault Storage] S3 storage adapter initialized for bucket: {settings.S3_BUCKET_NAME}")
-    except Exception as e:
-        print(f"[TrustVault Storage] S3 adapter initialization error ({e}). Falling back to LocalPrivateStorage.")
-        storage_service = LocalPrivateStorage()
-else:
-    storage_service = LocalPrivateStorage()
+def init_storage_service() -> BaseStorageAdapter:
+    """
+    Initializes the designated storage service.
+    Enforces strict failure if configured backend cannot be initialized:
+    NEVER silently falls back from S3 to local storage, preventing storage split-brain.
+    """
+    backend_choice = getattr(settings, "STORAGE_BACKEND", "local").lower().strip()
+    if backend_choice == "s3":
+        if not settings.S3_BUCKET_NAME or not settings.S3_ACCESS_KEY_ID or not settings.S3_SECRET_ACCESS_KEY:
+            raise RuntimeError(
+                "STORAGE_BACKEND is configured as 's3', but required S3 credentials "
+                "(S3_BUCKET_NAME, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY) are missing. "
+                "Failing fast to prevent silent fallback to ephemeral local storage."
+            )
+        try:
+            from app.storage.s3 import S3StorageAdapter
+            return S3StorageAdapter()
+        except Exception as e:
+            raise RuntimeError(
+                f"STORAGE_BACKEND is configured as 's3', but S3 adapter failed to initialize: {e}. "
+                "Silent fallback to local storage is strictly forbidden to prevent data splitting across storage engines."
+            ) from e
+    elif backend_choice == "local":
+        return LocalPrivateStorage(base_dir=settings.STORAGE_DIR)
+    else:
+        raise ValueError(f"Invalid STORAGE_BACKEND: '{backend_choice}'. Supported values: 's3', 'local'.")
+
+storage_service = init_storage_service()
 
 def sanitize_filename(filename: str) -> str:
     """
