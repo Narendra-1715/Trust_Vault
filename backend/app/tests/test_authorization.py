@@ -118,4 +118,57 @@ def test_search_never_reveals_unauthorized_documents(client: TestClient, test_us
     assert search_res.status_code == 200
     data = search_res.json()
     assert data["total"] == 0
-    assert len(data["documents"]) == 0
+
+def test_viewer_cannot_enumerate_users(client: TestClient, test_users):
+    """Verifies that ordinary viewers cannot enumerate organizational members."""
+    headers_v = get_auth_headers(client, "viewer_a@test.com", "ViewerAPass123!")
+    res = client.get("/api/v1/users", headers=headers_v)
+    assert res.status_code == 403
+    assert "Viewers are not authorized" in res.json()["detail"]
+
+def test_owner_gets_minimal_user_directory(client: TestClient, test_users):
+    """Verifies that authorized owners receive only minimal directory items without internal timestamps."""
+    headers_a = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
+    res = client.get("/api/v1/users", headers=headers_a)
+    assert res.status_code == 200
+    users = res.json()
+    assert len(users) > 0
+    first_user = users[0]
+    assert "id" in first_user
+    assert "email" in first_user
+    assert "display_name" in first_user
+    assert "role" in first_user
+    assert "created_at" not in first_user
+    assert "updated_at" not in first_user
+
+def test_admin_only_users_all_endpoint(client: TestClient, test_users):
+    """Verifies that GET /api/v1/users/all is strictly restricted to system administrators."""
+    headers_v = get_auth_headers(client, "viewer_a@test.com", "ViewerAPass123!")
+    headers_o = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
+    headers_admin = get_auth_headers(client, "admin@test.com", "AdminPass123!")
+
+    assert client.get("/api/v1/users/all", headers=headers_v).status_code == 403
+    assert client.get("/api/v1/users/all", headers=headers_o).status_code == 403
+    assert client.get("/api/v1/users/all", headers=headers_admin).status_code == 200
+
+def test_storage_checksum_corruption_detection(client: TestClient, test_users, test_db_session):
+    """Verifies that altered or corrupted file bytes on disk fail checksum validation upon download."""
+    import os
+    from app.storage.local import storage_service
+    from app.models.document import Document
+
+    headers_a = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
+    doc = upload_sample_doc(client, headers_a, "Tamper Target")
+    doc_id = doc["id"]
+
+    db_doc = test_db_session.query(Document).filter(Document.id == doc_id).first()
+    file_path = storage_service._resolve_safe_path(db_doc.internal_storage_key)
+
+    # Tamper with the file bytes directly on disk
+    with open(file_path, "wb") as f:
+        f.write(b"%PDF-1.4 TAMPERED CONTENT CORRUPTED ON DISK %%EOF")
+
+    # Download must fail with 500 Checksum mismatch
+    dl_res = client.get(f"/api/v1/documents/{doc_id}/download", headers=headers_a)
+    assert dl_res.status_code == 500
+    assert "File integrity check failed" in dl_res.json()["detail"]

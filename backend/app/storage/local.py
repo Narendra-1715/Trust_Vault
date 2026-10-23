@@ -86,6 +86,20 @@ class LocalPrivateStorage(BaseStorageAdapter):
         file_path = self._resolve_safe_path(storage_key)
         return os.path.exists(file_path)
 
+    def compute_checksum(self, storage_key: str) -> str:
+        """
+        Computes SHA-256 digest of stored bytes on disk to verify data integrity against corruption.
+        """
+        import hashlib
+        file_path = self._resolve_safe_path(storage_key)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found.")
+        hasher = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while chunk := f.read(64 * 1024):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
 storage_service = LocalPrivateStorage()
 
 def sanitize_filename(filename: str) -> str:

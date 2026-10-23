@@ -286,6 +286,29 @@ def download_document(
             detail="Storage object missing. Document data cannot be retrieved from private volume."
         )
 
+    # Verify stored bytes against recorded checksum to catch any disk corruption
+    if doc.checksum:
+        actual_checksum = storage_service.compute_checksum(doc.internal_storage_key)
+        if actual_checksum != doc.checksum:
+            log_audit_event(
+                db=db,
+                action="document.download.corruption_error",
+                resource_type="document",
+                resource_id=doc.id,
+                outcome="failure",
+                actor_id=current_user.id,
+                request_id=request_id,
+                metadata={
+                    "error": "Storage checksum mismatch detected. File data corrupted on volume.",
+                    "expected_checksum": doc.checksum,
+                    "actual_checksum": actual_checksum
+                }
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="File integrity check failed. Stored checksum does not match volume bytes."
+            )
+
     log_audit_event(
         db=db,
         action="document.download",

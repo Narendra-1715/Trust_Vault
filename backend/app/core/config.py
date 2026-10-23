@@ -50,8 +50,11 @@ class Settings(BaseSettings):
         "image/jpeg"
     ]
     
+    # Demo Data Seeding
+    SEED_DEMO_DATA: bool = False
+
     # AI Integration
-    GEMINI_API_KEY: Optional[str] = "AQ.Ab8RN6KneIAuL4Jiv9m4Ah3ty6LT3OksWBVtlmk11bkQiRhLlQ"
+    GEMINI_API_KEY: Optional[str] = None
     AI_PROVIDER: str = "gemini"  # "gemini" or "mock"
     AI_MODEL: str = "gemini-3.8-flash"
     

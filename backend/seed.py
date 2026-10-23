@@ -30,6 +30,11 @@ def seed_database():
     db = SessionLocal()
 
     try:
+        from app.core.config import settings
+        if settings.ENVIRONMENT == "production" and not getattr(settings, "SEED_DEMO_DATA", False):
+            print("[TrustVault Seeder] Production environment detected and SEED_DEMO_DATA is False. Skipping demo fixtures.")
+            return
+
         # Check if users already seeded
         existing_admin = db.query(User).filter(User.email == "admin@trustvault.com").first()
         if existing_admin:

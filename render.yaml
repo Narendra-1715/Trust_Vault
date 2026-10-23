@@ -1,13 +1,17 @@
 services:
-  # Backend API Web Service (Render Free Tier)
+  # Backend API Web Service
   - type: web
     name: trustvault-api
-    plan: free
+    plan: starter
     runtime: python
     rootDir: backend
     buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
-    startCommand: alembic upgrade head && python seed.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
+    disk:
+      name: trustvault-storage-disk
+      mountPath: /data/vault_storage
+      sizeGB: 10
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
@@ -18,9 +22,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: STORAGE_DIR
-        value: ./data/vault_storage
+        value: /data/vault_storage
       - key: GEMINI_API_KEY
-        value: AQ.Ab8RN6KneIAuL4Jiv9m4Ah3ty6LT3OksWBVtlmk11bkQiRhLlQ
+        sync: false
       - key: AI_PROVIDER
         value: gemini
       - key: AI_MODEL
@@ -30,7 +34,7 @@ services:
       - key: DEBUG
         value: "false"
       - key: BACKEND_CORS_ORIGINS
-        value: "*"
+        value: "https://trustvault-ui.onrender.com"
 
   # Frontend Web UI (Render Free Static Site)
   - type: web

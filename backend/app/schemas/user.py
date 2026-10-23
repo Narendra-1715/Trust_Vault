@@ -25,6 +25,15 @@ class UserUpdate(BaseModel):
     role: Optional[str] = Field(None, pattern="^(admin|owner|viewer)$")
     is_active: Optional[bool] = None
 
+class UserDirectoryItem(BaseModel):
+    """Minimal representation of organization members for authorized sharing workflows."""
+    id: str
+    email: str
+    display_name: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
+
 class UserResponse(BaseModel):
     id: str
     email: str

@@ -216,6 +216,24 @@ def run_suite():
     matrix_records.append(del_row)
     print(f"Tested Delete Document -> Anon:{del_row['anonymous']} | Viewer:{del_row.get('viewer_a_noperm')} | OwnerB:{del_row['owner_b']} | Admin:{del_row['admin']} | OwnerA:{del_row['owner_a']}")
 
+    # Test GET /api/v1/users (Minimal Directory)
+    users_row = {"endpoint": "GET /api/v1/users", "description": "List Users (Sharing Directory)"}
+    for persona in ["anonymous", "viewer_a_noperm", "owner_b", "admin", "owner_a"]:
+        h = {} if persona == "anonymous" else {"Authorization": f"Bearer {tokens[persona.replace('_noperm', '')]}"}
+        res = client.get("/api/v1/users", headers=h)
+        users_row[persona] = res.status_code
+    matrix_records.append(users_row)
+    print(f"Tested List Users -> Anon:{users_row['anonymous']} | Viewer:{users_row.get('viewer_a_noperm')} | OwnerB:{users_row['owner_b']} | Admin:{users_row['admin']} | OwnerA:{users_row['owner_a']}")
+
+    # Test GET /api/v1/users/all (Admin User Management)
+    admin_users_row = {"endpoint": "GET /api/v1/users/all", "description": "Admin List All Users"}
+    for persona in ["anonymous", "viewer_a_noperm", "owner_b", "admin", "owner_a"]:
+        h = {} if persona == "anonymous" else {"Authorization": f"Bearer {tokens[persona.replace('_noperm', '')]}"}
+        res = client.get("/api/v1/users/all", headers=h)
+        admin_users_row[persona] = res.status_code
+    matrix_records.append(admin_users_row)
+    print(f"Tested Admin All Users -> Anon:{admin_users_row['anonymous']} | Viewer:{admin_users_row.get('viewer_a_noperm')} | OwnerB:{admin_users_row['owner_b']} | Admin:{admin_users_row['admin']} | OwnerA:{admin_users_row['owner_a']}")
+
     results_summary["matrix"] = matrix_records
 
     # -------------------------------------------------------------

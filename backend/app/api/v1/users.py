@@ -3,20 +3,26 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate, UserDirectoryItem
 from app.api.deps import get_current_user, get_current_admin, get_request_id
 from app.audit.service import log_audit_event
 
 router = APIRouter()
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=List[UserDirectoryItem])
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Returns list of active organization users for permission assignment or admin views.
+    Returns minimal directory listing (id, email, display_name, role) for authorized sharing workflows.
+    Restricted to document owners and administrators. Ordinary viewers cannot enumerate the organization directory.
     """
+    if current_user.role == "viewer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewers are not authorized to enumerate organization members."
+        )
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name.asc()).all()
     return users
 
