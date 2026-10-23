@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, Plus, Search, Filter, Download, Eye, Lock, ShieldCheck, Database } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -9,6 +9,7 @@ import type { DocumentItem } from '../types';
 
 export const DocumentsPage: React.FC = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -32,6 +33,7 @@ export const DocumentsPage: React.FC = () => {
       toast.error(err.message || 'Download failed');
     } finally {
       setDownloadingId(null);
+      queryClient.invalidateQueries({ queryKey: ['auditEvents'] });
     }
   };
 

@@ -107,6 +107,8 @@ export const DocumentDetailPage: React.FC = () => {
       setIsPreviewOpen(false);
     } finally {
       setIsPreviewLoading(false);
+      queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+      queryClient.invalidateQueries({ queryKey: ['auditEvents'] });
     }
   };
 
@@ -127,6 +129,9 @@ export const DocumentDetailPage: React.FC = () => {
       toast.success(`Download started: ${doc.original_filename}`);
     } catch (err: any) {
       toast.error(err.message || 'Download failed');
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+      queryClient.invalidateQueries({ queryKey: ['auditEvents'] });
     }
   };
 

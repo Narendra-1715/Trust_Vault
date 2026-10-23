@@ -170,3 +170,19 @@ This document provides a genuine, chronological record of engineering sessions, 
   - Tested drag-and-drop file ingestion across multiple extensions (.pdf, .png, .txt).
   - Confirmed client-side SHA-256 checksum matches backend storage checksum byte-for-byte.
   - Frontend production build passed in 403ms with 0 errors.
+
+---
+
+### Session 13: Scope Isolation in Audit Log for Document Owners & Query Invalidation
+- **Date:** 2026-10-23
+- **Task / Objective:** Fix visibility of access rejection events (`document.download.denied`) in the audit log for document owners and ensure real-time frontend cache updates.
+- **Critical Discovery & Where AI Was Wrong:**
+  - The AI initially implemented audit event listing with a rigid filter: `if current_user.role != "admin": filters.append(AuditEvent.actor_id == current_user.id)`.
+  - **The Bug:** When a viewer without download permissions attempted to download an owner's document, the system logged `document.download.denied` with `actor_id = viewer.id`. When the document owner inspected the Audit Trail, the backend filtered by `actor_id = owner.id`, completely hiding the unauthorized download attempt from the owner!
+  - Furthermore, in the frontend, `handleDownload` did not invalidate the `['auditEvents']` or `['docAudit']` React Query caches on failure, causing the UI to display stale cached audit logs until manual page refresh.
+- **Engineering Correction:**
+  - Updated `backend/app/api/v1/audit.py` so that document owners can see events where they are the actor **OR** events on documents they own (`or_(AuditEvent.actor_id == current_user.id, AuditEvent.resource_id.in_(owned_doc_ids))`).
+  - Added automatic query cache invalidation in `DocumentsPage.tsx` and `DocumentDetailPage.tsx` upon any download attempt.
+- **Tests & Verification:**
+  - Simulated viewer download denial on owner's confidential document; verified that owner immediately sees `document.download.denied` in their audit trail.
+  - All 23 backend tests passed in 14.13s. Frontend build succeeded in 442ms.

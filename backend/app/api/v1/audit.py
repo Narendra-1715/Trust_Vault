@@ -1,6 +1,7 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db.session import get_db
 from app.models.user import User
@@ -54,9 +55,22 @@ def list_audit_events(
         AuthorizationPolicy.require_read(db, current_user, doc)
         filters.append(AuditEvent.resource_id == document_id)
     else:
-        # If no specific document is requested, non-admins can only see their own actor events
+        # Access scope:
+        # - Administrators can inspect all organizational audit events.
+        # - Document owners see events where they are the actor OR events on documents they own (e.g. download denials).
+        # - Viewers see audit events where they are the actor.
         if current_user.role != "admin":
-            filters.append(AuditEvent.actor_id == current_user.id)
+            owned_doc_ids = db.query(Document.id).filter(
+                Document.owner_id == current_user.id,
+                Document.deleted_at.is_(None)
+            ).scalar_subquery()
+
+            filters.append(
+                or_(
+                    AuditEvent.actor_id == current_user.id,
+                    AuditEvent.resource_id.in_(owned_doc_ids)
+                )
+            )
 
     if action:
         filters.append(AuditEvent.action.ilike(f"%{action.strip()}%"))
