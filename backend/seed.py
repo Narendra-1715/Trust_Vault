@@ -26,6 +26,7 @@ def seed_database():
     4. Viewer A: viewer_a@trustvault.com / ViewerAPass123!
     """
     print("[TrustVault Seeder] Initializing database...")
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
     try:

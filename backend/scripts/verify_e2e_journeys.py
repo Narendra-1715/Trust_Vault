@@ -12,11 +12,13 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.permission import DocumentPermission
 from app.models.audit import AuditEvent
+from seed import seed_database
 
 client = TestClient(app)
 
 def run_verification():
     print("=== TRUSTVAULT COMPLETE 12-STEP END-TO-END VERIFICATION ===")
+    seed_database()
 
     # Step 1: Owner signs in and uploads a document
     login_res = client.post("/api/v1/auth/login", json={"email": "owner_a@trustvault.com", "password": "OwnerAPass123!"})
