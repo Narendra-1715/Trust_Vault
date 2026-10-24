@@ -10,6 +10,7 @@ from app.models.audit import AuditEvent
 from app.models.notification import SecurityNotification
 from app.models.user import User
 from app.audit.service import log_audit_event
+from app.services.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,54 @@ def create_or_suppress_alert(
             db.add(user_notif)
 
         db.commit()
+
+        # Real-time WebSocket broadcast to admins & targeted users
+        try:
+            alert_payload = {
+                "type": "SECURITY_ALERT_CREATED",
+                "data": {
+                    "id": str(alert.id),
+                    "event_type": alert.event_type,
+                    "severity": alert.severity,
+                    "summary": alert.summary,
+                    "status": alert.status,
+                    "timestamp": alert.timestamp.isoformat() if alert.timestamp else None,
+                    "actor_id": alert.actor_id,
+                    "target_user_id": alert.target_user_id,
+                    "target_document_id": alert.target_document_id
+                }
+            }
+            manager.sync_broadcast_to_admins(alert_payload)
+            for admin in admins:
+                manager.sync_send_to_user(str(admin.id), {
+                    "type": "NOTIFICATION_RECEIVED",
+                    "data": {
+                        "id": str(uuid.uuid4()),
+                        "title": f"Security Alert: {summary[:60]}",
+                        "message": summary,
+                        "severity": severity,
+                        "event_type": f"alert.{event_type}",
+                        "resource_id": alert.id,
+                        "created_at": now.isoformat(),
+                        "is_read": False
+                    }
+                })
+            if target_user_id and target_user_id != actor_id:
+                manager.sync_send_to_user(str(target_user_id), {
+                    "type": "NOTIFICATION_RECEIVED",
+                    "data": {
+                        "id": str(uuid.uuid4()),
+                        "title": "Account Security Notice",
+                        "message": summary,
+                        "severity": severity,
+                        "event_type": f"alert.{event_type}",
+                        "resource_id": alert.id,
+                        "created_at": now.isoformat(),
+                        "is_read": False
+                    }
+                })
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Failed to dispatch alert notifications: {e}")
         db.rollback()

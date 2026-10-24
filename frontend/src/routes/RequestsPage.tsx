@@ -268,7 +268,7 @@ export const RequestsPage: React.FC = () => {
   };
 
   return (
-    <div className="container" style={{ padding: '2rem 0 4rem' }}>
+    <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '1.75rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -313,6 +313,9 @@ export const RequestsPage: React.FC = () => {
         gap: '0.5rem',
         borderBottom: '1px solid var(--border)',
         marginBottom: '1.5rem',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        whiteSpace: 'nowrap',
       }}>
         <button
           onClick={() => setActiveTab('incoming')}

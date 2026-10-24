@@ -668,7 +668,7 @@ export const DocumentDetailPage: React.FC = () => {
 
   if (isDocLoading) {
     return (
-      <div className="container" style={{ padding: '4rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div className="container" style={{ paddingTop: '4rem', paddingBottom: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
           <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '10px', height: '10px' }}></span>
           <span style={{ fontSize: '0.875rem' }}>Loading confidential document...</span>
@@ -679,7 +679,7 @@ export const DocumentDetailPage: React.FC = () => {
 
   if (docError || !doc) {
     return (
-      <div className="container" style={{ padding: '3.5rem 0', textAlign: 'center' }}>
+      <div className="container" style={{ paddingTop: '3.5rem', paddingBottom: '3.5rem', textAlign: 'center' }}>
         <div className="panel" style={{ maxWidth: '480px', margin: '0 auto', padding: '2.5rem' }}>
           <div style={{
             width: '46px',

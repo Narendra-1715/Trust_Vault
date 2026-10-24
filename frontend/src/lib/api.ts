@@ -73,7 +73,7 @@ function resolveApiUrl(raw?: string): string {
   return stripped;
 }
 
-const apiUrl = resolveApiUrl(import.meta.env.VITE_API_URL as string | undefined);
+export const apiUrl = resolveApiUrl(import.meta.env.VITE_API_URL as string | undefined);
 const API_BASE = apiUrl + '/api/v1';
 
 export class ApiError extends Error {

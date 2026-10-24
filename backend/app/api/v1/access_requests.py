@@ -39,6 +39,7 @@ from app.services.authorization import (
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
 from app.services.detection import detect_invalid_reference_probes, detect_cross_owner_probes
+from app.services.websocket import manager
 
 router = APIRouter()
 
@@ -231,6 +232,21 @@ def create_access_request(
         event_type="access_request.received",
         resource_id=new_request.id
     )
+
+    try:
+        manager.sync_send_to_user(str(doc.owner_id), {
+            "type": "ACCESS_REQUEST_CREATED",
+            "data": {
+                "id": str(new_request.id),
+                "document_id": str(doc.id),
+                "document_title": doc.title,
+                "requester_id": str(current_user.id),
+                "requester_name": current_user.display_name,
+                "permission": perm_level
+            }
+        })
+    except Exception:
+        pass
 
     return build_access_request_response(new_request)
 
@@ -494,6 +510,20 @@ def approve_access_request(
         resource_id=doc.id
     )
 
+    try:
+        manager.sync_send_to_user(str(access_req.requester_id), {
+            "type": "ACCESS_REQUEST_DECIDED",
+            "data": {
+                "id": str(access_req.id),
+                "status": "approved",
+                "document_id": str(doc.id),
+                "document_title": doc.title,
+                "approved_permission": approved_perm
+            }
+        })
+    except Exception:
+        pass
+
     return build_access_request_response(access_req)
 
 @router.post("/{request_id}/reject", response_model=AccessRequestResponse)
@@ -587,6 +617,19 @@ def reject_access_request(
         event_type="access_request.rejected",
         resource_id=access_req.document_id
     )
+
+    try:
+        manager.sync_send_to_user(str(access_req.requester_id), {
+            "type": "ACCESS_REQUEST_DECIDED",
+            "data": {
+                "id": str(access_req.id),
+                "status": "rejected",
+                "document_id": str(access_req.document_id),
+                "rejection_reason": rejection_msg
+            }
+        })
+    except Exception:
+        pass
 
     return build_access_request_response(access_req)
 
@@ -1078,6 +1121,21 @@ def submit_access_request_via_link(
         event_type="access_request.received",
         resource_id=new_request.id
     )
+
+    try:
+        manager.sync_send_to_user(str(doc.owner_id), {
+            "type": "ACCESS_REQUEST_CREATED",
+            "data": {
+                "id": str(new_request.id),
+                "document_id": str(doc.id),
+                "document_title": doc.title,
+                "requester_id": str(current_user.id),
+                "requester_name": current_user.display_name,
+                "permission": perm_level
+            }
+        })
+    except Exception:
+        pass
 
     return build_access_request_response(new_request)
 

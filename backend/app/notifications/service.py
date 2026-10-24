@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.notification import SecurityNotification
 from app.models.audit import AuditEvent
 from app.services.detection import detect_repeated_denials
+from app.services.websocket import manager
 
 def create_security_notification(
     db: Session,
@@ -30,6 +31,25 @@ def create_security_notification(
     db.add(notif)
     db.commit()
     db.refresh(notif)
+
+    # Real-time WebSocket dispatch to recipient
+    try:
+        manager.sync_send_to_user(str(user_id), {
+            "type": "NOTIFICATION_RECEIVED",
+            "data": {
+                "id": str(notif.id),
+                "title": notif.title,
+                "message": notif.message,
+                "severity": notif.severity,
+                "event_type": notif.event_type,
+                "resource_id": notif.resource_id,
+                "created_at": notif.created_at.isoformat() if notif.created_at else None,
+                "is_read": notif.is_read
+            }
+        })
+    except Exception:
+        pass
+
     return notif
 
 def check_and_notify_repeated_denials(

@@ -14,7 +14,7 @@ from app.core.logging import (
     client_ip_ctx
 )
 from app.services.authorization import DocumentNotFoundException, not_found_response
-from app.api.v1 import auth, users, admin, documents, permissions, audit, ai, health, notifications, access_requests, alerts, backups, security_policies, access_reviews, policy_simulator
+from app.api.v1 import auth, users, admin, documents, permissions, audit, ai, health, notifications, access_requests, alerts, backups, security_policies, access_reviews, policy_simulator, ws
 
 # Phase 11: Initialize Structured Logging
 if settings.STRUCTURED_LOGGING_ENABLED:
@@ -247,6 +247,8 @@ app.include_router(access_requests.router, prefix=f"{api_v1}/access-requests", t
 app.include_router(ai.router, prefix=f"{api_v1}", tags=["AI Access Recommendations"])
 app.include_router(audit.router, prefix=f"{api_v1}/audit", tags=["Audit & Integrity"])
 app.include_router(health.router, prefix=f"{api_v1}", tags=["Health Check"])
+app.include_router(ws.router, prefix=f"{api_v1}", tags=["Live WebSockets"])
+app.include_router(ws.router, tags=["Live WebSockets"])
 
 @app.get("/")
 def root():
