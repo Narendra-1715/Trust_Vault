@@ -28,9 +28,15 @@ class AIReadOnlySession:
         # Attempt to set PostgreSQL role if running on Postgres
         try:
             if self._db.bind and self._db.bind.dialect.name == "postgresql":
-                self._db.execute(text("SET LOCAL ROLE ai_readonly;"))
+                sp = self._db.begin_nested()
+                try:
+                    self._db.execute(text("SET LOCAL ROLE ai_readonly;"))
+                    sp.commit()
+                except Exception as inner_e:
+                    sp.rollback()
+                    logger.debug(f"Could not SET LOCAL ROLE ai_readonly: {inner_e}")
         except Exception as e:
-            logger.debug(f"Could not SET LOCAL ROLE ai_readonly: {e}")
+            logger.debug(f"Could not configure nested transaction for ai_readonly: {e}")
 
     def query(self, *entities, **kwargs):
         return self._db.query(*entities, **kwargs)

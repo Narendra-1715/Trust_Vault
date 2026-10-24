@@ -179,8 +179,8 @@ class AuthorizationService:
         if db.bind and db.bind.dialect.name == "postgresql":
             try:
                 from sqlalchemy import text
-                db.execute(text("SET LOCAL app.current_user_id = :uid"), {"uid": str(principal.id)})
-                db.execute(text("SET LOCAL app.current_org_id = :org"), {"org": str(getattr(principal, "org_id", "default-org"))})
+                db.execute(text("SELECT set_config('app.current_user_id', :uid, true)"), {"uid": str(principal.id)})
+                db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": str(getattr(principal, "org_id", "default-org"))})
             except Exception:
                 pass
 
