@@ -869,8 +869,8 @@ export const SecurityAlertsPage: React.FC = () => {
               <button
                 onClick={() => revokeSessionsMutation.mutate(selectedAlert.id)}
                 disabled={revokeSessionsMutation.isPending}
-                className="btn btn-danger"
-                style={{ fontSize: '0.8125rem', backgroundColor: '#B91C1C' }}
+                className="btn btn-danger-solid"
+                style={{ fontSize: '0.8125rem', backgroundColor: '#B91C1C', color: '#FFFFFF', borderColor: '#991B1B' }}
               >
                 {revokeSessionsMutation.isPending ? 'Terminating...' : 'Terminate All Sessions'}
               </button>

@@ -122,7 +122,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
           <button
             type="button"
-            className={`btn ${variant === 'danger' ? 'btn-danger' : 'btn-primary'} btn-sm`}
+            className={`btn ${variant === 'danger' ? 'btn-danger-solid' : 'btn-primary'} btn-sm`}
             onClick={onConfirm}
             disabled={isLoading}
             style={{ padding: '0.45rem 1rem', minWidth: '90px' }}
