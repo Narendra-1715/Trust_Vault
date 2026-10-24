@@ -5,8 +5,11 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 class BreakGlassRequest(BaseModel):
     document_id: str = Field(..., description="ID of private document requiring emergency access")
     justification: str = Field(..., min_length=15, description="Clear business or security emergency reason")
-    duration_minutes: int = Field(default=30, ge=5, le=120, description="Access duration in minutes (max 120)")
+    ticket_id: Optional[str] = Field(default=None, description="Incident ticket ID (e.g. SEC-1042)")
+    duration_minutes: int = Field(default=60, ge=5, le=240, description="Access duration in minutes (default 60, hard max 240)")
     password: str = Field(..., min_length=1, description="Admin password for mandatory reauthentication")
+    approval_mode: Literal["direct", "multi_party", "time_delay"] = Field(default="direct", description="Approval protocol")
+    delay_hours: int = Field(default=4, ge=0, le=72, description="Delay window in hours if time_delay is chosen")
 
 class BreakGlassReviewRequest(BaseModel):
     review_notes: str = Field(..., min_length=5, description="Post-incident review observations")
@@ -21,10 +24,15 @@ class BreakGlassResponse(BaseModel):
     document_id: str
     document_title: Optional[str] = None
     justification: str
+    ticket_id: Optional[str] = None
+    approval_mode: Optional[str] = None
     status: str
+    delay_until: Optional[datetime] = None
     expires_at: datetime
     created_at: datetime
     revoked_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
+    approver_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[str] = None
     reviewer_name: Optional[str] = None

@@ -56,6 +56,7 @@ class Decision:
     principal_id: Optional[str]
     resource_id: Optional[str]
     document: Optional[Document] = None
+    is_break_glass: bool = False
 
 class DocumentNotFoundException(HTTPException):
     def __init__(self):
@@ -229,25 +230,30 @@ class AuthorizationService:
                 document=None
             )
 
-        # 6. Orphaned document protection: owner disabled or deleted
-        # If the document owner is deactivated, documents are frozen to non-owners
-        # and only visible via designated break-glass emergency activation
+        # 6. Orphaned / Compromised document protection:
+        # If the document owner is deactivated, or document is frozen due to containment,
+        # documents are completely frozen to all users (including owner and grantees)
+        # and only visible via designated break-glass emergency activation by administrators
+        is_doc_frozen = getattr(doc, "is_frozen", False)
         owner = db.query(User).filter(User.id == doc.owner_id).first()
-        if not owner or not owner.is_active:
+        is_owner_inactive = (not owner or not owner.is_active)
+
+        if is_doc_frozen or is_owner_inactive:
             # Check if principal has active break-glass
             if principal.role == "admin" and action in [Action.VIEW, Action.DOWNLOAD, Action.VIEW_METADATA]:
                 if cls._has_active_break_glass(db, principal.id, doc.id):
                     return Decision(
                         allowed=True,
-                        reason="break_glass_orphaned_document_recovery",
+                        reason="break_glass_frozen_document_recovery",
                         action=action,
                         principal_id=principal_id,
                         resource_id=resource_id,
-                        document=doc
+                        document=doc,
+                        is_break_glass=True
                     )
             return Decision(
                 allowed=False,
-                reason="orphaned_document_frozen",
+                reason="document_frozen_due_to_containment" if is_doc_frozen else "orphaned_document_frozen",
                 action=action,
                 principal_id=principal_id,
                 resource_id=resource_id,
@@ -277,7 +283,8 @@ class AuthorizationService:
                         action=action,
                         principal_id=principal_id,
                         resource_id=resource_id,
-                        document=doc
+                        document=doc,
+                        is_break_glass=True
                     )
                 else:
                     return Decision(
@@ -492,6 +499,25 @@ class AuthorizationService:
                 pass
             equalize_timing(t0)
             raise_not_found()
+
+        if decision.is_break_glass:
+            try:
+                log_audit_event(
+                    db=db,
+                    action=f"break_glass.{action.value.lower()}",
+                    resource_type="document",
+                    resource_id=resource_id,
+                    outcome="success",
+                    actor_id=principal.id if principal else None,
+                    request_id=request_id or "break-glass",
+                    metadata={
+                        "is_break_glass": True,
+                        "action": action.value,
+                        "reason": decision.reason
+                    }
+                )
+            except Exception:
+                pass
 
         return decision.document
 

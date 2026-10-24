@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, BigInteger, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Text, BigInteger, DateTime, ForeignKey, Index, Boolean
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -18,6 +18,7 @@ class Document(Base):
     checksum = Column(String(64), nullable=False)  # SHA-256
     category = Column(String(50), nullable=False, default="General", index=True)
     classification = Column(String(50), nullable=False, default="Internal", index=True)
+    is_frozen = Column(Boolean, default=False, nullable=False, server_default='0')
     permission_epoch = Column(BigInteger, default=1, nullable=False)
     org_id = Column(String(50), default="default-org", nullable=False, index=True)
     transferred_at = Column(DateTime, nullable=True)

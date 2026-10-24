@@ -6,9 +6,10 @@ from app.db.session import Base
 
 class EmergencyAccess(Base):
     """
-    Break-Glass Emergency Access Model.
-    Records justified, time-limited, reauthenticated emergency access
+    Break-Glass Emergency Access Model (Phase 7).
+    Records justified, time-limited, scoped, reauthenticated emergency access
     granted to an administrator for a private document.
+    Supports multi-party (M-of-N) approval or high-friction time delay with active cancellation window.
     """
     __tablename__ = "emergency_accesses"
 
@@ -16,7 +17,11 @@ class EmergencyAccess(Base):
     admin_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     justification = Column(Text, nullable=False)
-    status = Column(String(20), default="active", nullable=False)  # active, expired, revoked
+    ticket_id = Column(String(100), nullable=True, index=True)
+    approval_mode = Column(String(30), default="direct", nullable=False) # direct, multi_party, time_delay
+    status = Column(String(20), default="active", nullable=False)  # active, pending_approval, pending_delay, expired, revoked, cancelled
+    delay_until = Column(DateTime, nullable=True)
+    approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     revoked_at = Column(DateTime, nullable=True)
@@ -26,6 +31,7 @@ class EmergencyAccess(Base):
 
     # Relationships
     admin = relationship("User", foreign_keys=[admin_id])
+    approver = relationship("User", foreign_keys=[approved_by])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
     document = relationship("Document")
 

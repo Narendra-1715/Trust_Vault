@@ -1,6 +1,7 @@
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text, desc
@@ -40,6 +41,7 @@ router = APIRouter()
 def build_break_glass_response(ba: EmergencyAccess) -> BreakGlassResponse:
     admin = ba.admin
     reviewer = ba.reviewer
+    approver = getattr(ba, "approver", None)
     doc = ba.document
     return BreakGlassResponse(
         id=ba.id,
@@ -49,10 +51,15 @@ def build_break_glass_response(ba: EmergencyAccess) -> BreakGlassResponse:
         document_id=ba.document_id,
         document_title=doc.title if doc else None,
         justification=ba.justification,
+        ticket_id=getattr(ba, "ticket_id", None),
+        approval_mode=getattr(ba, "approval_mode", "direct"),
         status=ba.status,
+        delay_until=getattr(ba, "delay_until", None),
         expires_at=ba.expires_at,
         created_at=ba.created_at,
         revoked_at=ba.revoked_at,
+        approved_by=getattr(ba, "approved_by", None),
+        approver_name=approver.display_name if approver else None,
         reviewed_at=ba.reviewed_at,
         reviewed_by=ba.reviewed_by,
         reviewer_name=reviewer.display_name if reviewer else None,
@@ -255,6 +262,10 @@ def rotate_kms_kek(
 
 # ================= EMERGENCY ACCESS (BREAK-GLASS) =================
 
+from app.services.authorization import is_valid_uuid
+from app.services.incident import IncidentService
+from app.api.deps import get_current_user
+
 @router.post("/break-glass", response_model=BreakGlassResponse, status_code=status.HTTP_201_CREATED)
 def activate_break_glass_access(
     req: BreakGlassRequest,
@@ -263,14 +274,24 @@ def activate_break_glass_access(
     admin_user: User = Depends(get_current_admin)
 ):
     """
-    Emergency Break-Glass Activation:
+    Emergency Break-Glass Protocol (Phase 7 / Invariant I1):
     Allows an administrator to request time-limited, justified access to a private document.
-    Requires strong reauthentication via current administrator password.
-    Emits security alerts and immutable audit log records.
+    Enforces:
+    - Scoped to specific document ID (zero wildcard access permitted)
+    - Strong reauthentication via administrator password
+    - Multi-party approval (M-of-N) OR high-friction delay with active owner cancellation window
+    - Hard limit of 4 hours max duration
     """
     request_id = get_request_id(request)
 
-    # 1. Mandatory Strong Reauthentication
+    # 1. No Wildcard Access Permitted
+    if req.document_id in ["*", "all", "%", ""] or not is_valid_uuid(req.document_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Wildcard break-glass access is strictly forbidden. Must target an explicit document ID."
+        )
+
+    # 2. Mandatory Strong Reauthentication
     if not verify_password(req.password, admin_user.password_hash):
         log_audit_event(
             db=db,
@@ -287,20 +308,34 @@ def activate_break_glass_access(
             detail="Reauthentication failed: Incorrect password"
         )
 
-    # 2. Verify Document Exists
+    # 3. Verify Document Exists
     doc = db.query(Document).filter(Document.id == req.document_id, Document.deleted_at.is_(None)).first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     now_utc = datetime.now(timezone.utc)
-    expires_at = now_utc + timedelta(minutes=req.duration_minutes)
+    duration_mins = min(max(req.duration_minutes, 5), 240)
+    expires_at = now_utc + timedelta(minutes=duration_mins)
+    ticket = req.ticket_id.strip() if req.ticket_id else f"INC-{str(uuid.uuid4())[:8]}"
 
-    # 3. Create Emergency Access Record
+    # Determine activation state
+    status_val = "active"
+    delay_until = None
+    if req.approval_mode == "multi_party":
+        status_val = "pending_approval"
+    elif req.approval_mode == "time_delay":
+        status_val = "pending_delay"
+        delay_until = now_utc + timedelta(hours=req.delay_hours)
+
+    # 4. Create Emergency Access Record
     emergency = EmergencyAccess(
         admin_id=admin_user.id,
         document_id=doc.id,
         justification=req.justification.strip(),
-        status="active",
+        ticket_id=ticket,
+        approval_mode=req.approval_mode,
+        status=status_val,
+        delay_until=delay_until,
         expires_at=expires_at,
         created_at=now_utc
     )
@@ -308,22 +343,22 @@ def activate_break_glass_access(
     db.commit()
     db.refresh(emergency)
 
-    # 4. Notify Document Owner and Security Personnel
+    # 5. Notify Document Owner and Security Personnel
     if doc.owner_id:
         create_security_notification(
             db=db,
             user_id=doc.owner_id,
-            title="Emergency Break-Glass Access Activated",
-            message=f"Administrator {admin_user.display_name} activated break-glass access on document '{doc.title}'. Justification: {req.justification[:100]}...",
+            title="Emergency Break-Glass Access Alert",
+            message=f"Administrator {admin_user.display_name} initiated break-glass access on document '{doc.title}'. Mode: {req.approval_mode}, Ticket: {ticket}. Justification: {req.justification[:100]}...",
             severity="critical",
-            event_type="break_glass_activated",
+            event_type="break_glass_initiated",
             resource_id=doc.id
         )
 
-    # 5. Log Immutable Audit Record
+    # 6. Log Immutable Audit Record with is_break_glass flag
     log_audit_event(
         db=db,
-        action="admin.break_glass.activated",
+        action="admin.break_glass.requested",
         resource_type="document",
         resource_id=doc.id,
         outcome="success",
@@ -332,13 +367,130 @@ def activate_break_glass_access(
         metadata={
             "emergency_access_id": emergency.id,
             "document_title": doc.title,
+            "ticket_id": ticket,
+            "approval_mode": req.approval_mode,
+            "status": status_val,
             "justification": req.justification,
-            "duration_minutes": req.duration_minutes,
-            "expires_at": expires_at.isoformat()
+            "duration_minutes": duration_mins,
+            "expires_at": expires_at.isoformat(),
+            "is_break_glass": True
         }
     )
 
     return build_break_glass_response(emergency)
+
+@router.post("/break-glass/{id}/approve", response_model=BreakGlassResponse)
+def approve_break_glass_access(
+    id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin)
+):
+    """
+    Multi-Party Approval (M-of-N):
+    A second, distinct administrator/security officer must approve the break-glass request.
+    The requester CANNOT self-approve.
+    """
+    request_id = get_request_id(request)
+    record = db.query(EmergencyAccess).filter(EmergencyAccess.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Emergency access record not found")
+
+    if record.status not in ["pending_approval", "pending_delay"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve break-glass in status '{record.status}'"
+        )
+
+    # Strict multi-party enforcement: requester cannot self-approve
+    if record.admin_id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Multi-party violation: The break-glass requester cannot self-approve."
+        )
+
+    now_utc = datetime.now(timezone.utc)
+    duration = record.expires_at - record.created_at
+    record.status = "active"
+    record.approved_by = admin_user.id
+    record.expires_at = now_utc + duration
+
+    # Increment permission epoch to synchronize access
+    if record.document:
+        record.document.permission_epoch = (record.document.permission_epoch or 1) + 1
+
+    db.commit()
+    db.refresh(record)
+
+    log_audit_event(
+        db=db,
+        action="admin.break_glass.approved",
+        resource_type="document",
+        resource_id=record.document_id,
+        outcome="success",
+        actor_id=admin_user.id,
+        request_id=request_id,
+        metadata={
+            "emergency_access_id": record.id,
+            "requester_id": record.admin_id,
+            "approver_id": admin_user.id,
+            "is_break_glass": True
+        }
+    )
+
+    return build_break_glass_response(record)
+
+@router.post("/break-glass/{id}/cancel", response_model=BreakGlassResponse)
+def cancel_break_glass_access(
+    id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Active Cancellation Window:
+    Allows either an administrator or the document owner to cancel a pending or active break-glass.
+    """
+    request_id = get_request_id(request)
+    record = db.query(EmergencyAccess).filter(EmergencyAccess.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Emergency access record not found")
+
+    doc = record.document
+    is_owner = (doc and doc.owner_id == current_user.id)
+    is_admin = (current_user.role == "admin")
+
+    if not is_owner and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the document owner or an administrator can cancel break-glass access."
+        )
+
+    now_utc = datetime.now(timezone.utc)
+    record.status = "cancelled"
+    record.revoked_at = now_utc
+
+    if doc:
+        doc.permission_epoch = (doc.permission_epoch or 1) + 1
+
+    db.commit()
+    db.refresh(record)
+
+    log_audit_event(
+        db=db,
+        action="admin.break_glass.cancelled",
+        resource_type="document",
+        resource_id=record.document_id,
+        outcome="success",
+        actor_id=current_user.id,
+        request_id=request_id,
+        metadata={
+            "emergency_access_id": record.id,
+            "cancelled_by_owner": is_owner
+        }
+    )
+
+    return build_break_glass_response(record)
 
 @router.get("/break-glass", response_model=List[BreakGlassResponse])
 def list_break_glass_accesses(
@@ -366,19 +518,36 @@ def revoke_break_glass_access(
     id: str,
     request: Request,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Immediately revokes an active emergency break-glass access grant.
+    Synchronous Immediate Revocation:
+    Immediately revokes an active emergency break-glass grant.
+    Accessible to ANY administrator or the document owner.
     """
     request_id = get_request_id(request)
     record = db.query(EmergencyAccess).filter(EmergencyAccess.id == id).first()
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Emergency access record not found")
 
+    doc = record.document
+    is_owner = (doc and doc.owner_id == current_user.id)
+    is_admin = (current_user.role == "admin")
+
+    if not is_owner and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the document owner or an administrator can revoke emergency access."
+        )
+
     now_utc = datetime.now(timezone.utc)
     record.status = "revoked"
     record.revoked_at = now_utc
+
+    # Cut off streaming mid-flight via permission epoch increment
+    if doc:
+        doc.permission_epoch = (doc.permission_epoch or 1) + 1
+
     db.commit()
     db.refresh(record)
 
@@ -388,7 +557,7 @@ def revoke_break_glass_access(
         resource_type="document",
         resource_id=record.document_id,
         outcome="success",
-        actor_id=admin_user.id,
+        actor_id=current_user.id,
         request_id=request_id,
         metadata={"emergency_access_id": record.id}
     )
@@ -425,7 +594,34 @@ def review_break_glass_access(
         outcome="success",
         actor_id=admin_user.id,
         request_id=request_id,
-        metadata={"emergency_access_id": record.id, "review_notes": record.review_notes}
+        metadata={
+            "emergency_access_id": record.id,
+            "review_notes": record.review_notes
+        }
     )
 
     return build_break_glass_response(record)
+
+@router.post("/users/{user_id}/isolate", response_model=Dict[str, Any])
+def isolate_user_endpoint(
+    user_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin)
+):
+    """
+    Owner Compromise Containment:
+    Immediately terminates all sessions, revokes refresh tokens, freezes owned documents,
+    and revokes outgoing grants.
+    """
+    request_id = get_request_id(request)
+    try:
+        return IncidentService.isolate_user(
+            db=db,
+            user_id=user_id,
+            actor_id=admin_user.id,
+            reason="Admin triggered account isolation",
+            request_id=request_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

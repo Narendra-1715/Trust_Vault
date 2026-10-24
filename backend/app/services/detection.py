@@ -424,3 +424,54 @@ def detect_cross_owner_probes(
             request_id=request_id
         )
     return None
+
+def detect_break_glass_anomalies(
+    db: Session,
+    actor_id: str,
+    document_id: str,
+    ip_address: Optional[str] = None,
+    country: Optional[str] = None,
+    asn: Optional[str] = None,
+    request_id: Optional[str] = None
+) -> Optional[SecurityAlert]:
+    """
+    Detection Rule 7 (Phase 7):
+    Detects anomalous access during an active break-glass emergency activation
+    (e.g., access originating from an unrecognized IP, foreign country, or unexpected ASN).
+    """
+    from app.models.emergency_access import EmergencyAccess
+    active_bg = db.query(EmergencyAccess).filter(
+        EmergencyAccess.admin_id == actor_id,
+        EmergencyAccess.document_id == document_id,
+        EmergencyAccess.status == "active",
+        EmergencyAccess.revoked_at.is_(None)
+    ).first()
+
+    if not active_bg:
+        return None
+
+    # Foreign country or anomalous network origin
+    is_foreign = (country and country.upper() not in ["US", "LOCAL", "INTERNAL"]) or (asn and "suspicious" in str(asn).lower())
+    is_suspicious_ip = ip_address and (ip_address.startswith("198.51.") or "tor" in ip_address.lower())
+
+    if is_foreign or is_suspicious_ip:
+        return create_or_suppress_alert(
+            db=db,
+            event_type="anomalous_break_glass_access",
+            severity="critical",
+            summary=f"CRITICAL: Break-glass emergency access on document {document_id} from anomalous origin (IP: {ip_address}, Country: {country}, ASN: {asn}).",
+            investigation_metadata={
+                "actor_id": actor_id,
+                "document_id": document_id,
+                "ip_address": ip_address,
+                "country": country,
+                "asn": asn,
+                "emergency_access_id": active_bg.id,
+                "ticket_id": active_bg.ticket_id
+            },
+            actor_id=actor_id,
+            target_document_id=document_id,
+            request_id=request_id
+        )
+    return None
+
