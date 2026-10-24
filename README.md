@@ -167,7 +167,7 @@ $$H_i = \mathrm{SHA256}\Big(\mathrm{CanonicalJSON}(e_i)\Big)$$
 
 where payload $e_i$ contains normalized fields:
 
-$$e_i = \Big( \text{id}, \text{timestamp}_{\text{UTC}}, \text{actor\_id}, \text{action}, \text{resource\_id}, \text{outcome}, \text{metadata}, H_{i-1} \Big)$$
+$$e_i = \Big( \text{id},\; \text{timestamp}_{\text{UTC}},\; \text{actor},\; \text{action},\; \text{resource},\; \text{outcome},\; \text{metadata},\; H_{i-1} \Big)$$
 
 For the genesis record ($i = 0$): $H_0 = 0^{64}$.
 
