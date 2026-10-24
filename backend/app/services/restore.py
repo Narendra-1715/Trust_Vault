@@ -449,6 +449,63 @@ def execute_restore(
             ))
         db.flush()
 
+        # Restore document versions
+        restored_version_doc_ids = set()
+        for v in tables.get("document_versions", []):
+            db.add(DocumentVersion(
+                id=v["id"],
+                document_id=v["document_id"],
+                version_number=v["version_number"],
+                storage_key=v["storage_key"],
+                original_filename=v["original_filename"],
+                file_size=v["file_size"],
+                checksum=v["checksum"],
+                detected_media_type=v["detected_media_type"],
+                change_summary=v.get("change_summary"),
+                uploaded_by=v.get("uploaded_by"),
+                is_current=v.get("is_current", True),
+                created_at=parse_iso_dt(v["created_at"])
+            ))
+            restored_version_doc_ids.add(v["document_id"])
+        db.flush()
+
+        # Backward compatibility for backups created before explicit version tracking
+        import uuid as _uuid
+        for d in tables.get("documents", []):
+            if d["id"] not in restored_version_doc_ids:
+                db.add(DocumentVersion(
+                    id=str(_uuid.uuid4()),
+                    document_id=d["id"],
+                    version_number=1,
+                    storage_key=d["internal_storage_key"],
+                    original_filename=d["original_filename"],
+                    file_size=d["file_size"],
+                    checksum=d["checksum"],
+                    detected_media_type=d["detected_media_type"],
+                    change_summary="Initial disaster recovery baseline",
+                    uploaded_by=d["owner_id"],
+                    is_current=True,
+                    created_at=parse_iso_dt(d["created_at"])
+                ))
+        db.flush()
+
+        # Restore document encryption keys (DEKs)
+        for k in tables.get("document_keys", []):
+            wrapped_val = k["wrapped_dek"]
+            raw_dek = bytes.fromhex(wrapped_val) if isinstance(wrapped_val, str) else wrapped_val
+            db.add(DocumentKey(
+                id=k["id"],
+                document_id=k["document_id"],
+                version_id=k.get("version_id"),
+                wrapped_dek=raw_dek,
+                kek_id=k["kek_id"],
+                algorithm=k.get("algorithm", "AES-256-GCM"),
+                chunk_size=k.get("chunk_size", 65536),
+                created_at=parse_iso_dt(k["created_at"]),
+                rotated_at=parse_iso_dt(k.get("rotated_at"))
+            ))
+        db.flush()
+
         for idx, a in enumerate(tables.get("audit_events", [])):
             db.add(AuditEvent(
                 id=a["id"],

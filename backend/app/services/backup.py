@@ -23,6 +23,8 @@ from app.models.notification import SecurityNotification
 from app.models.access_request import AccessRequest
 from app.models.request_link import DocumentRequestLink
 from app.models.security_alert import SecurityAlert
+from app.models.document_key import DocumentKey
+from app.models.document_version import DocumentVersion
 from app.storage.local import storage_service
 from app.audit.service import log_audit_event
 from app.audit.verifier import verify_audit_integrity
@@ -316,6 +318,40 @@ def export_database_records(db: Session) -> Dict[str, Any]:
             "decision": ai.decision
         })
 
+    # 11. Document Versions
+    versions_data = []
+    for v in db.query(DocumentVersion).all():
+        versions_data.append({
+            "id": v.id,
+            "document_id": v.document_id,
+            "version_number": v.version_number,
+            "storage_key": v.storage_key,
+            "original_filename": v.original_filename,
+            "file_size": v.file_size,
+            "checksum": v.checksum,
+            "detected_media_type": v.detected_media_type,
+            "change_summary": v.change_summary,
+            "uploaded_by": v.uploaded_by,
+            "is_current": v.is_current,
+            "created_at": format_dt(v.created_at)
+        })
+
+    # 12. Document Encryption Keys (Wrapped DEKs)
+    keys_data = []
+    for k in db.query(DocumentKey).all():
+        wrapped_hex = k.wrapped_dek.hex() if isinstance(k.wrapped_dek, bytes) else str(k.wrapped_dek)
+        keys_data.append({
+            "id": k.id,
+            "document_id": k.document_id,
+            "version_id": k.version_id,
+            "wrapped_dek": wrapped_hex,
+            "kek_id": k.kek_id,
+            "algorithm": k.algorithm,
+            "chunk_size": k.chunk_size,
+            "created_at": format_dt(k.created_at),
+            "rotated_at": format_dt(k.rotated_at)
+        })
+
     # Alembic Revision
     alembic_rev = None
     try:
@@ -339,7 +375,9 @@ def export_database_records(db: Session) -> Dict[str, Any]:
             "access_requests": requests_data,
             "request_links": links_data,
             "security_alerts": alerts_data,
-            "ai_suggestions": ai_data
+            "ai_suggestions": ai_data,
+            "document_versions": versions_data,
+            "document_keys": keys_data
         }
     }
 
