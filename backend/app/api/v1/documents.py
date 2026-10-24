@@ -129,6 +129,39 @@ async def upload_document(
     doc_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
 
+    # Pre-populate and flush Document and DocumentVersion so parent rows exist for foreign keys
+    new_doc = Document(
+        id=doc_id,
+        owner_id=current_user.id,
+        title=title.strip(),
+        description=description.strip() if description else None,
+        original_filename=safe_original_name,
+        internal_storage_key=f"pending_{doc_id}",
+        detected_media_type=file.content_type or "application/octet-stream",
+        file_size=0,
+        checksum=f"pending_{doc_id}",
+        category=category.strip() or "General",
+        classification=cleaned_classification,
+        org_id=getattr(current_user, "org_id", "default-org")
+    )
+    db.add(new_doc)
+
+    initial_version = DocumentVersion(
+        id=version_id,
+        document_id=new_doc.id,
+        version_number=1,
+        storage_key=f"pending_{version_id}",
+        original_filename=safe_original_name,
+        file_size=0,
+        checksum=f"pending_{version_id}",
+        detected_media_type=new_doc.detected_media_type,
+        change_summary="Initial upload",
+        uploaded_by=current_user.id,
+        is_current=True,
+    )
+    db.add(initial_version)
+    db.flush()
+
     try:
         storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
             db=db,
@@ -141,37 +174,14 @@ async def upload_document(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File encryption and storage failed")
 
-    # Save metadata in database
-    new_doc = Document(
-        id=doc_id,
-        owner_id=current_user.id,
-        title=title.strip(),
-        description=description.strip() if description else None,
-        original_filename=safe_original_name,
-        internal_storage_key=storage_key,
-        detected_media_type=file.content_type or "application/octet-stream",
-        file_size=total_bytes,
-        checksum=checksum,
-        category=category.strip() or "General",
-        classification=cleaned_classification,
-        org_id=getattr(current_user, "org_id", "default-org")
-    )
-    db.add(new_doc)
+    # Update metadata with final storage key, size, and checksum
+    new_doc.internal_storage_key = storage_key
+    new_doc.file_size = total_bytes
+    new_doc.checksum = checksum
+    initial_version.storage_key = storage_key
+    initial_version.file_size = total_bytes
+    initial_version.checksum = checksum
 
-    initial_version = DocumentVersion(
-        id=version_id,
-        document_id=new_doc.id,
-        version_number=1,
-        storage_key=storage_key,
-        original_filename=safe_original_name,
-        file_size=total_bytes,
-        checksum=checksum,
-        detected_media_type=new_doc.detected_media_type,
-        change_summary="Initial upload",
-        uploaded_by=current_user.id,
-        is_current=True,
-    )
-    db.add(initial_version)
     db.commit()
     db.refresh(new_doc)
 
@@ -675,17 +685,6 @@ async def upload_document_version(
     await file.seek(0)
 
     new_version_id = str(uuid.uuid4())
-    try:
-        storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
-            db=db,
-            principal=current_user,
-            document_id=doc.id,
-            version_id=new_version_id,
-            file_obj=file.file
-        )
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Version encryption and storage failed")
 
     # Determine next version number
     max_ver = db.query(func.max(DocumentVersion.version_number)).filter(DocumentVersion.document_id == doc.id).scalar() or 0
@@ -698,18 +697,35 @@ async def upload_document_version(
         id=new_version_id,
         document_id=doc.id,
         version_number=next_ver,
-        storage_key=storage_key,
+        storage_key=f"pending_{new_version_id}",
         original_filename=safe_original_name,
-        file_size=total_bytes,
-        checksum=checksum,
+        file_size=0,
+        checksum=f"pending_{new_version_id}",
         detected_media_type=file.content_type or "application/octet-stream",
         change_summary=change_summary.strip() if change_summary else None,
         uploaded_by=current_user.id,
         is_current=True,
     )
     db.add(new_version)
+    db.flush()
 
-    # Update document pointer
+    try:
+        storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
+            db=db,
+            principal=current_user,
+            document_id=doc.id,
+            version_id=new_version_id,
+            file_obj=file.file
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Version encryption and storage failed")
+
+    # Update version and document pointer
+    new_version.storage_key = storage_key
+    new_version.file_size = total_bytes
+    new_version.checksum = checksum
+
     doc.internal_storage_key = storage_key
     doc.checksum = checksum
     doc.file_size = total_bytes
@@ -896,6 +912,28 @@ def restore_document_version(
                 self.buf = self.buf[size:]
                 return data
 
+        max_ver = db.query(func.max(DocumentVersion.version_number)).filter(DocumentVersion.document_id == doc.id).scalar() or 0
+        next_ver = max_ver + 1
+
+        # Mark existing versions not current
+        db.query(DocumentVersion).filter(DocumentVersion.document_id == doc.id).update({"is_current": False})
+
+        restored_version = DocumentVersion(
+            id=restored_version_id,
+            document_id=doc.id,
+            version_number=next_ver,
+            storage_key=f"pending_{restored_version_id}",
+            original_filename=version_to_restore.original_filename,
+            file_size=0,
+            checksum=f"pending_{restored_version_id}",
+            detected_media_type=version_to_restore.detected_media_type,
+            change_summary=f"Restored from version {version_to_restore.version_number}",
+            uploaded_by=current_user.id,
+            is_current=True,
+        )
+        db.add(restored_version)
+        db.flush()
+
         new_storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
             db=db,
             principal=current_user,
@@ -907,26 +945,9 @@ def restore_document_version(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to copy and re-encrypt version payload: {e}")
 
-    max_ver = db.query(func.max(DocumentVersion.version_number)).filter(DocumentVersion.document_id == doc.id).scalar() or 0
-    next_ver = max_ver + 1
-
-    # Mark existing versions not current
-    db.query(DocumentVersion).filter(DocumentVersion.document_id == doc.id).update({"is_current": False})
-
-    restored_version = DocumentVersion(
-        id=restored_version_id,
-        document_id=doc.id,
-        version_number=next_ver,
-        storage_key=new_storage_key,
-        original_filename=version_to_restore.original_filename,
-        file_size=total_bytes,
-        checksum=checksum,
-        detected_media_type=version_to_restore.detected_media_type,
-        change_summary=f"Restored from version {version_to_restore.version_number}",
-        uploaded_by=current_user.id,
-        is_current=True,
-    )
-    db.add(restored_version)
+    restored_version.storage_key = new_storage_key
+    restored_version.file_size = total_bytes
+    restored_version.checksum = checksum
 
     doc.internal_storage_key = new_storage_key
     doc.checksum = checksum

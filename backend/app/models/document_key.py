@@ -18,5 +18,5 @@ class DocumentKey(Base):
     rotated_at = Column(DateTime, nullable=True)
 
     # Relationships
-    document = relationship("Document", foreign_keys=[document_id])
-    version = relationship("DocumentVersion", foreign_keys=[version_id])
+    document = relationship("Document", back_populates="keys", foreign_keys=[document_id])
+    version = relationship("DocumentVersion", back_populates="keys", foreign_keys=[version_id])

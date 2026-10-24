@@ -23,6 +23,7 @@ class DocumentVersion(Base):
     # Relationships
     document = relationship("Document", back_populates="versions")
     uploader = relationship("User", foreign_keys=[uploaded_by])
+    keys = relationship("DocumentKey", back_populates="version", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_doc_versions_doc_ver", "document_id", "version_number", unique=True),

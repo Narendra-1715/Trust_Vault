@@ -33,6 +33,7 @@ class Document(Base):
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     ai_suggestions = relationship("AIAccessSuggestion", back_populates="document", cascade="all, delete-orphan")
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="desc(DocumentVersion.version_number)")
+    keys = relationship("DocumentKey", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_documents_owner_deleted", "owner_id", "deleted_at"),
