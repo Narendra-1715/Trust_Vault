@@ -9,6 +9,7 @@ Sole entry point for decrypting content, enforcing Admin Blindness (Invariant I1
 
 import os
 import io
+import time
 import struct
 import hashlib
 import secrets
@@ -129,7 +130,9 @@ class ContentService:
         principal: Optional[User],
         document_id: str,
         version_id: Optional[str] = None,
-        request_id: Optional[str] = None
+        request_id: Optional[str] = None,
+        revalidate_chunks: int = 10,
+        revalidate_seconds: float = 2.0
     ) -> Generator[bytes, None, None]:
         """
         Authenticated decryption streaming:
@@ -222,8 +225,38 @@ class ContentService:
         if header_bytes != MAGIC_HEADER:
             # Yield raw stream directly for backwards-compatibility
             def legacy_stream():
+                last_reval_time = time.time()
+                chunks_since_last_reval = 0
                 yield header_bytes
                 for c in storage_service.read_file_stream(storage_key, chunk_size=CHUNK_SIZE):
+                    chunks_since_last_reval += 1
+                    now_time = time.time()
+                    if chunks_since_last_reval >= revalidate_chunks or (now_time - last_reval_time) >= revalidate_seconds:
+                        chunks_since_last_reval = 0
+                        last_reval_time = now_time
+                        db.expire_all()
+                        midstream_decision = AuthorizationService.decide(
+                            db=db,
+                            principal=principal,
+                            action=Action.DOWNLOAD,
+                            resource_id=document_id,
+                            context=context
+                        )
+                        if not midstream_decision.allowed:
+                            log_audit_event(
+                                db=db,
+                                action="document.download.revoked_mid_stream",
+                                resource_type="document",
+                                resource_id=document_id,
+                                outcome="denied",
+                                actor_id=principal.id if principal else None,
+                                request_id=request_id or "midstream",
+                                metadata={"reason": "Permission revoked or expired mid-stream"}
+                            )
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Access grant has been revoked or expired mid-stream."
+                            )
                     yield c
             return legacy_stream()
 
@@ -268,6 +301,8 @@ class ContentService:
 
         # 6. Generator for streaming decryption and integrity verification
         def decrypt_generator():
+            last_reval_time = time.time()
+            chunks_since_last_reval = 0
             full_raw_stream = storage_service.read_file_stream(storage_key, chunk_size=1024 * 1024)
             buffer = bytearray()
             # Consume magic header
@@ -316,6 +351,41 @@ class ContentService:
                         # Ciphertext tampered or swapped across documents!
                         _trigger_tamper_alert(db, document_id, principal, f"AES-GCM tag mismatch on chunk {chunk_index}. Tampering or swapped chunk detected.")
                         raise HTTPException(status_code=500, detail="Data integrity check failed: Tampered or swapped ciphertext chunk.")
+
+                    # Invariant I2 (Instant Revocation): Re-validate authorization synchronously against live DB
+                    # every N chunks or every 2 seconds, whichever comes first
+                    chunks_since_last_reval += 1
+                    now_time = time.time()
+                    if chunks_since_last_reval >= revalidate_chunks or (now_time - last_reval_time) >= revalidate_seconds:
+                        chunks_since_last_reval = 0
+                        last_reval_time = now_time
+                        db.expire_all()
+                        midstream_decision = AuthorizationService.decide(
+                            db=db,
+                            principal=principal,
+                            action=Action.DOWNLOAD,
+                            resource_id=document_id,
+                            context=context
+                        )
+                        if not midstream_decision.allowed:
+                            log_audit_event(
+                                db=db,
+                                action="document.download.revoked_mid_stream",
+                                resource_type="document",
+                                resource_id=document_id,
+                                outcome="denied",
+                                actor_id=principal.id if principal else None,
+                                request_id=request_id or "midstream",
+                                metadata={
+                                    "reason": "Permission revoked or expired mid-stream",
+                                    "chunk_index": chunk_index,
+                                    "recheck_reason": midstream_decision.reason
+                                }
+                            )
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Access grant has been revoked or expired mid-stream."
+                            )
 
                     stream_hasher.update(plaintext_chunk)
                     expected_chunk_index += 1

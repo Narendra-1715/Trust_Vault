@@ -246,6 +246,8 @@ def revoke_all_user_sessions_admin(
     revoked_count = len(active_sessions)
     for s in active_sessions:
         s.revoked_at = now_utc
+        s.session_version = (s.session_version or 1) + 1
+    target_user.session_version = (target_user.session_version or 1) + 1
     db.commit()
 
     log_audit_event(
@@ -283,6 +285,7 @@ def revoke_single_user_session_admin(
 
     if session.revoked_at is None:
         session.revoked_at = datetime.now(timezone.utc)
+        session.session_version = (session.session_version or 1) + 1
         db.commit()
 
         log_audit_event(

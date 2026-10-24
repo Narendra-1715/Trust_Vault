@@ -59,6 +59,13 @@ def get_current_user(
             detail="Inactive user account"
         )
 
+    # Session version validation: if token contains session_version, verify against live User.session_version
+    token_session_ver = payload.get("session_version")
+    if token_session_ver is not None:
+        user_session_ver = getattr(user, "session_version", 1) or 1
+        if int(token_session_ver) < int(user_session_ver):
+            raise credentials_exception
+
     # Session validation for tokens with JTI
     jti = payload.get("jti")
     current_session = None
@@ -66,6 +73,10 @@ def get_current_user(
         session = db.query(UserSession).filter(UserSession.session_token_jti == jti).first()
         if not session or session.revoked_at is not None:
             raise credentials_exception
+
+        if token_session_ver is not None and getattr(session, "session_version", None) is not None:
+            if int(token_session_ver) < int(session.session_version):
+                raise credentials_exception
 
         now_utc = datetime.now(timezone.utc)
         exp = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at

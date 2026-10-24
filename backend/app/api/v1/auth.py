@@ -83,7 +83,13 @@ def login(
 
     # Generate unique session identifier JTI
     jti = str(uuid.uuid4())
-    access_token = create_access_token(subject=user.id, role=user.role, jti=jti)
+    session_ver = getattr(user, "session_version", 1) or 1
+    access_token = create_access_token(
+        subject=user.id,
+        role=user.role,
+        jti=jti,
+        session_version=session_ver
+    )
 
     # Determine client IP and User Agent
     client_ip = request.client.host if request.client else "unknown"
@@ -100,6 +106,7 @@ def login(
     new_session = UserSession(
         user_id=user.id,
         session_token_jti=jti,
+        session_version=session_ver,
         ip_address=client_ip,
         user_agent=user_agent[:500],
         device_info=device_info,
@@ -271,6 +278,7 @@ def revoke_single_session(
     if session.revoked_at is None:
         now_utc = datetime.now(timezone.utc)
         session.revoked_at = now_utc
+        session.session_version = (session.session_version or 1) + 1
         db.commit()
 
         request_id = get_request_id(request)
@@ -331,6 +339,10 @@ def revoke_other_sessions(
 
     for s in sessions_to_revoke:
         s.revoked_at = now_utc
+        s.session_version = (s.session_version or 1) + 1
+
+    if not exclude_current:
+        current_user.session_version = (current_user.session_version or 1) + 1
 
     db.commit()
 

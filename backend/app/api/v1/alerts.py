@@ -277,6 +277,11 @@ def revoke_suspicious_user_sessions(
     revoked_count = len(active_sessions)
     for s in active_sessions:
         s.revoked_at = now_utc
+        s.session_version = (s.session_version or 1) + 1
+
+    target_user = db.query(User).filter(User.id == target_user_id).first()
+    if target_user:
+        target_user.session_version = (target_user.session_version or 1) + 1
 
     # Append resolution update to the alert
     existing_meta = dict(alert.investigation_metadata or {})

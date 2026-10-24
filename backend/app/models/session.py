@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, DateTime, ForeignKey, Index, Integer
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -10,6 +10,7 @@ class UserSession(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     session_token_jti = Column(String(64), unique=True, index=True, nullable=False)
+    session_version = Column(Integer, default=1, nullable=False)
     ip_address = Column(String(64), nullable=True)
     user_agent = Column(String(512), nullable=True)
     device_info = Column(String(255), nullable=True)

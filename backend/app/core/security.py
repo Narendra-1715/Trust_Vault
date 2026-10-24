@@ -29,7 +29,8 @@ def create_access_token(
     subject: Union[str, Any],
     role: str,
     expires_delta: Optional[timedelta] = None,
-    jti: Optional[str] = None
+    jti: Optional[str] = None,
+    session_version: Optional[int] = None
 ) -> str:
     """Generates a signed JWT access token."""
     now = datetime.now(timezone.utc)
@@ -46,6 +47,8 @@ def create_access_token(
     }
     if jti:
         to_encode["jti"] = str(jti)
+    if session_version is not None:
+        to_encode["session_version"] = int(session_version)
         
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt

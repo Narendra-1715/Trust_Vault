@@ -414,6 +414,9 @@ def download_document(
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, private",
+        "Pragma": "no-cache",
+        "Cross-Origin-Resource-Policy": "same-origin",
         "Content-Length": str(doc.file_size)
     }
 
@@ -715,6 +718,9 @@ def download_document_version(
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store, private",
+        "Pragma": "no-cache",
+        "Cross-Origin-Resource-Policy": "same-origin",
         "Content-Length": str(version.file_size)
     }
 

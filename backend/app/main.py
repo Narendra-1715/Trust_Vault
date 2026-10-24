@@ -20,6 +20,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+
+        # Invariant I2 & Phase 3: Zero-cache guarantees across all API and content routes
+        if request.url.path.startswith("/api/") or "/download" in request.url.path:
+            response.headers["Cache-Control"] = "no-store, private"
+            response.headers["Pragma"] = "no-cache"
+
         if not settings.DEBUG:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
@@ -33,7 +40,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition", "X-Content-Type-Options", "Content-Length"]
+    expose_headers=[
+        "Content-Disposition",
+        "X-Content-Type-Options",
+        "Content-Length",
+        "Cache-Control",
+        "Pragma",
+        "Cross-Origin-Resource-Policy"
+    ]
 )
 
 # Include API v1 Routers
