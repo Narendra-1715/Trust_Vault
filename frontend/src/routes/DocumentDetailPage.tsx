@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -29,7 +29,8 @@ import {
   Info,
   CheckCircle2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MoreVertical
 } from 'lucide-react';
 import { api, clearAuthToken } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -46,6 +47,34 @@ export const DocumentDetailPage: React.FC = () => {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'permissions' | 'versions' | 'ai' | 'audit' | 'links'>('permissions');
+
+  // Action dropdown menu state
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isActionMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isActionMenuOpen]);
 
   // Version management state
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
@@ -759,44 +788,207 @@ export const DocumentDetailPage: React.FC = () => {
               </div>
             )}
 
-          {/* Action Buttons Group */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" onClick={handleOpenPreview}>
-              <Eye size={15} color="var(--copper-dark)" />
-              <span>Secure Preview</span>
+          {/* Action Menu (Vertical Three-Dot Dropdown) */}
+          <div style={{ position: 'relative' }} ref={actionMenuRef}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setIsActionMenuOpen(prev => !prev)}
+              aria-label="Document actions"
+              aria-haspopup="true"
+              aria-expanded={isActionMenuOpen}
+              title="More actions"
+              style={{
+                padding: '0.45rem 0.6rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isActionMenuOpen ? 'var(--bg-surface-secondary)' : undefined,
+                borderColor: isActionMenuOpen ? 'var(--border-dark)' : undefined,
+              }}
+            >
+              <MoreVertical size={18} color="var(--graphite)" />
             </button>
 
-            <button className="btn btn-primary" onClick={handleDownload}>
-              <Download size={15} color="var(--copper)" />
-              <span>Download File</span>
-            </button>
-
-            {canEdit && (
-              <button className="btn btn-secondary" onClick={handleStartEdit}>
-                <Edit3 size={15} color="var(--text-secondary)" />
-                <span>Edit Metadata</span>
-              </button>
-            )}
-
-            {isOwner && (
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setActiveTab('links');
-                  window.scrollTo({ top: 400, behavior: 'smooth' });
+            {isActionMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  minWidth: '200px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)',
+                  border: '1px solid var(--border)',
+                  zIndex: 50,
+                  padding: '0.375rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.125rem',
                 }}
-                title="Create or manage secure request links"
               >
-                <Link2 size={15} color="var(--copper-dark)" />
-                <span>Share Request Link</span>
-              </button>
-            )}
+                {/* 1. Secure Preview */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    handleOpenPreview();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.625rem',
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: 500,
+                    color: 'var(--graphite)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Eye size={15} color="var(--copper-dark)" />
+                  <span>Secure Preview</span>
+                </button>
 
-            {isOwner && (
-              <button className="btn btn-danger" onClick={handleDelete}>
-                <Trash2 size={15} />
-                <span>Delete</span>
-              </button>
+                {/* 2. Download File */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    handleDownload();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.625rem',
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: 500,
+                    color: 'var(--graphite)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Download size={15} color="var(--copper)" />
+                  <span>Download File</span>
+                </button>
+
+                {/* 3. Edit Metadata */}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      handleStartEdit();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: 500,
+                      color: 'var(--graphite)',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <Edit3 size={15} color="var(--text-secondary)" />
+                    <span>Edit Metadata</span>
+                  </button>
+                )}
+
+                {/* 4. Share Request Link */}
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setActiveTab('links');
+                      window.scrollTo({ top: 400, behavior: 'smooth' });
+                    }}
+                    title="Create or manage secure request links"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: 500,
+                      color: 'var(--graphite)',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <Link2 size={15} color="var(--copper-dark)" />
+                    <span>Share Request Link</span>
+                  </button>
+                )}
+
+                {/* 5. Delete (red text, separated by a divider) */}
+                {isOwner && (
+                  <>
+                    <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.25rem 0' }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        handleDelete();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.625rem',
+                        width: '100%',
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: '#DC2626',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background-color 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <Trash2 size={15} color="#DC2626" />
+                      <span>Delete</span>
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
