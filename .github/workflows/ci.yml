@@ -34,6 +34,7 @@ jobs:
       AI_PROVIDER: mock
       ENVIRONMENT: testing
       HYPOTHESIS_PROFILE: ci
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/backend
 
     steps:
       - uses: actions/checkout@v4
