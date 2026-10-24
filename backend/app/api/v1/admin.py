@@ -20,10 +20,13 @@ from app.schemas.admin import (
     BreakGlassReviewRequest,
     SystemSettingItem,
     SystemSettingUpdateRequest,
-    SystemStatusResponse
+    SystemStatusResponse,
+    RotateKekRequest,
+    RotateKekResponse
 )
 from app.schemas.document import AdminDocumentMetadataListResponse, AdminDocumentMetadataResponse
 from app.services.authorization import get_admin_metadata_view
+from app.services.content import ContentService
 from app.api.deps import get_current_admin, get_request_id
 from app.core.security import verify_password
 from app.core.config import settings
@@ -229,6 +232,25 @@ def list_admin_document_inventory(
     return AdminDocumentMetadataListResponse(
         total=len(items),
         documents=items
+    )
+
+@router.post("/kms/rotate-kek", response_model=RotateKekResponse)
+def rotate_kms_kek(
+    req: RotateKekRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin)
+):
+    """
+    KEK Rotation:
+    Rewraps all Data Encryption Keys (DEKs) in document_keys under a new KEK version.
+    Zero downtime, does not require re-encrypting ciphertext chunks on disk.
+    Strictly restricted to administrators.
+    """
+    new_kek_bytes = bytes.fromhex(req.new_kek_hex) if req.new_kek_hex else None
+    count = ContentService.rotate_kek(db, req.new_kek_id, new_kek_bytes, actor_id=admin_user.id)
+    return RotateKekResponse(
+        rotated_keys_count=count,
+        new_kek_id=req.new_kek_id
     )
 
 # ================= EMERGENCY ACCESS (BREAK-GLASS) =================

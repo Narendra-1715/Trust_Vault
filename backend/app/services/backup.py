@@ -26,6 +26,7 @@ from app.models.security_alert import SecurityAlert
 from app.storage.local import storage_service
 from app.audit.service import log_audit_event
 from app.audit.verifier import verify_audit_integrity
+from app.services.content import MAGIC_HEADER as ENVELOPE_MAGIC_HEADER
 
 MAGIC_HEADER = b"TVENC01\n"
 SALT = b"TrustVault-Backup-v1-Salt"
@@ -420,10 +421,16 @@ def create_backup(
                         f_out.write(chunk)
 
                 computed_hash = hasher.hexdigest()
-                if computed_hash != doc.checksum:
-                    raise BackupIntegrityError(
-                        f"Checksum mismatch for document '{doc.id}': expected {doc.checksum}, got {computed_hash}."
-                    )
+
+                # Check if file on disk is an envelope-encrypted ciphertext object
+                with open(dest_object_path, "rb") as f_check:
+                    header = f_check.read(len(ENVELOPE_MAGIC_HEADER))
+
+                if header != ENVELOPE_MAGIC_HEADER:
+                    if computed_hash != doc.checksum:
+                        raise BackupIntegrityError(
+                            f"Checksum mismatch for document '{doc.id}': expected {doc.checksum}, got {computed_hash}."
+                        )
 
                 total_object_bytes += bytes_written
                 documents_manifest.append({

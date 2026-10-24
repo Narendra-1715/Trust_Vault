@@ -13,11 +13,13 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.permission import DocumentPermission
+from app.models.document_key import DocumentKey
 from app.schemas.document import DocumentResponse, DocumentListResponse, DocumentUpdate, OwnershipTransferRequest
 from app.schemas.document_version import DocumentVersionResponse, DocumentVersionListResponse
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
 from app.services.authorization import AuthorizationService, Action, raise_not_found, get_admin_metadata_view
+from app.services.content import ContentService
 from app.storage.local import (
     storage_service,
     sanitize_filename,
@@ -114,45 +116,6 @@ async def upload_document(
     validate_file_content(header_bytes, ext, file.content_type or "")
     await file.seek(0)
 
-    # Stream to private storage and compute checksum
-    storage_key = f"{uuid.uuid4().hex}.bin"
-    hasher = hashlib.sha256()
-    total_bytes = 0
-
-    try:
-        # Buffer into private storage
-        def file_reader():
-            nonlocal total_bytes
-            while chunk := file.file.read(64 * 1024):
-                total_bytes += len(chunk)
-                if total_bytes > settings.MAX_FILE_SIZE_BYTES:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail="File exceeds maximum allowed size of 25MB"
-                    )
-                hasher.update(chunk)
-                yield chunk
-
-        # Write to local private storage
-        class StreamWrapper:
-            def __init__(self, gen):
-                self.gen = gen
-            def read(self, size=-1):
-                try:
-                    return next(self.gen)
-                except StopIteration:
-                    return b""
-
-        total_bytes = storage_service.save_file(StreamWrapper(file_reader()), storage_key)
-        checksum = hasher.hexdigest()
-
-    except HTTPException:
-        storage_service.delete_file(storage_key)
-        raise
-    except Exception as e:
-        storage_service.delete_file(storage_key)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File storage failed")
-
     cleaned_classification = classification.strip() if classification else "Internal"
     if cleaned_classification not in VALID_CLASSIFICATIONS:
         raise HTTPException(
@@ -160,8 +123,24 @@ async def upload_document(
             detail=f"Invalid classification '{cleaned_classification}'. Allowed: {', '.join(VALID_CLASSIFICATIONS)}"
         )
 
+    doc_id = str(uuid.uuid4())
+    version_id = str(uuid.uuid4())
+
+    try:
+        storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
+            db=db,
+            principal=current_user,
+            document_id=doc_id,
+            version_id=version_id,
+            file_obj=file.file
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File encryption and storage failed")
+
     # Save metadata in database
     new_doc = Document(
+        id=doc_id,
         owner_id=current_user.id,
         title=title.strip(),
         description=description.strip() if description else None,
@@ -171,13 +150,13 @@ async def upload_document(
         file_size=total_bytes,
         checksum=checksum,
         category=category.strip() or "General",
-        classification=cleaned_classification
+        classification=cleaned_classification,
+        org_id=getattr(current_user, "org_id", "default-org")
     )
-
     db.add(new_doc)
-    db.flush()
 
     initial_version = DocumentVersion(
+        id=version_id,
         document_id=new_doc.id,
         version_number=1,
         storage_key=storage_key,
@@ -413,57 +392,12 @@ def download_document(
     request_id = get_request_id(request)
     doc = AuthorizationService.enforce(db, current_user, Action.DOWNLOAD, document_id, request_id=request_id)
 
-    if not storage_service.exists(doc.internal_storage_key):
-        log_audit_event(
-            db=db,
-            action="document.download.error",
-            resource_type="document",
-            resource_id=doc.id,
-            outcome="failure",
-            actor_id=current_user.id,
-            request_id=request_id,
-            metadata={
-                "error": "Storage payload missing from private volume",
-                "storage_key": doc.internal_storage_key,
-                "filename": doc.original_filename
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Storage object missing. Document data cannot be retrieved from private volume."
-        )
-
-    # Verify stored bytes against recorded checksum to catch any disk corruption
-    if doc.checksum:
-        actual_checksum = storage_service.compute_checksum(doc.internal_storage_key)
-        if actual_checksum != doc.checksum:
-            log_audit_event(
-                db=db,
-                action="document.download.corruption_error",
-                resource_type="document",
-                resource_id=doc.id,
-                outcome="failure",
-                actor_id=current_user.id,
-                request_id=request_id,
-                metadata={
-                    "error": "Storage checksum mismatch detected. File data corrupted on volume.",
-                    "expected_checksum": doc.checksum,
-                    "actual_checksum": actual_checksum
-                }
-            )
-            create_security_notification(
-                db=db,
-                user_id=doc.owner_id,
-                title="Document Integrity Check Failed",
-                message=f"Checksum mismatch detected for document '{doc.title}'. File data on volume does not match recorded SHA-256 hash.",
-                severity="critical",
-                event_type="document.integrity.mismatch",
-                resource_id=doc.id
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="File integrity check failed. Stored checksum does not match volume bytes."
-            )
+    stream_gen = ContentService.stream(
+        db=db,
+        principal=current_user,
+        document_id=document_id,
+        request_id=request_id
+    )
 
     log_audit_event(
         db=db,
@@ -484,7 +418,7 @@ def download_document(
     }
 
     return StreamingResponse(
-        storage_service.read_file_stream(doc.internal_storage_key),
+        stream_gen,
         media_type=doc.detected_media_type,
         headers=headers
     )
@@ -569,6 +503,8 @@ def delete_document(
     for v in doc.versions:
         if v.storage_key != doc.internal_storage_key:
             storage_service.delete_file(v.storage_key)
+    # Crypto-shredding: destroy wrapped DEKs to render all backup/disk copies unrecoverable
+    ContentService.crypto_shred(db, doc.id)
     doc.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -666,40 +602,18 @@ async def upload_document_version(
     validate_file_content(header_bytes, ext, file.content_type or "")
     await file.seek(0)
 
-    storage_key = f"{uuid.uuid4().hex}.bin"
-    hasher = hashlib.sha256()
-    total_bytes = 0
-
+    new_version_id = str(uuid.uuid4())
     try:
-        def file_reader():
-            nonlocal total_bytes
-            while chunk := file.file.read(64 * 1024):
-                total_bytes += len(chunk)
-                if total_bytes > settings.MAX_FILE_SIZE_BYTES:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail="File exceeds maximum allowed size of 25MB"
-                    )
-                hasher.update(chunk)
-                yield chunk
-
-        class StreamWrapper:
-            def __init__(self, gen):
-                self.gen = gen
-            def read(self, size=-1):
-                try:
-                    return next(self.gen)
-                except StopIteration:
-                    return b""
-
-        total_bytes = storage_service.save_file(StreamWrapper(file_reader()), storage_key)
-        checksum = hasher.hexdigest()
-    except HTTPException:
-        storage_service.delete_file(storage_key)
-        raise
-    except Exception:
-        storage_service.delete_file(storage_key)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File storage failed")
+        storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
+            db=db,
+            principal=current_user,
+            document_id=doc.id,
+            version_id=new_version_id,
+            file_obj=file.file
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Version encryption and storage failed")
 
     # Determine next version number
     max_ver = db.query(func.max(DocumentVersion.version_number)).filter(DocumentVersion.document_id == doc.id).scalar() or 0
@@ -709,6 +623,7 @@ async def upload_document_version(
     db.query(DocumentVersion).filter(DocumentVersion.document_id == doc.id).update({"is_current": False})
 
     new_version = DocumentVersion(
+        id=new_version_id,
         document_id=doc.id,
         version_number=next_ver,
         storage_key=storage_key,
@@ -796,47 +711,20 @@ def download_document_version(
         request_id=request_id
     )
 
-    if not storage_service.exists(version.storage_key):
-        log_audit_event(
-            db=db,
-            action="document.version.download.error",
-            resource_type="document",
-            resource_id=doc.id,
-            outcome="failure",
-            actor_id=current_user.id,
-            request_id=request_id,
-            metadata={
-                "version_id": version.id,
-                "version_number": version.version_number,
-                "error": "Storage payload missing from private volume"
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Storage object missing. Document version cannot be retrieved."
-        )
+    safe_name = version.original_filename.replace('"', '\\"')
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "X-Content-Type-Options": "nosniff",
+        "Content-Length": str(version.file_size)
+    }
 
-    if version.checksum:
-        actual_checksum = storage_service.compute_checksum(version.storage_key)
-        if actual_checksum != version.checksum:
-            log_audit_event(
-                db=db,
-                action="document.version.download.corruption_error",
-                resource_type="document",
-                resource_id=doc.id,
-                outcome="failure",
-                actor_id=current_user.id,
-                request_id=request_id,
-                metadata={
-                    "version_number": version.version_number,
-                    "expected_checksum": version.checksum,
-                    "actual_checksum": actual_checksum
-                }
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="File integrity check failed. Stored checksum does not match volume bytes."
-            )
+    stream_gen = ContentService.stream(
+        db=db,
+        principal=current_user,
+        document_id=document_id,
+        version_id=version_id,
+        request_id=request_id
+    )
 
     log_audit_event(
         db=db,
@@ -854,15 +742,8 @@ def download_document_version(
         }
     )
 
-    safe_name = version.original_filename.replace('"', '\\"')
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "X-Content-Type-Options": "nosniff",
-        "Content-Length": str(version.file_size)
-    }
-
     return StreamingResponse(
-        storage_service.read_file_stream(version.storage_key),
+        stream_gen,
         media_type=version.detected_media_type,
         headers=headers
     )
@@ -897,23 +778,48 @@ def restore_document_version(
             detail="Original version file missing from private storage. Cannot restore."
         )
 
-    # Copy storage payload to new key for the new version
-    new_storage_key = f"{uuid.uuid4().hex}.bin"
+    restored_version_id = str(uuid.uuid4())
+
+    # Stream plaintext from version_to_restore and re-encrypt under restored_version_id
     try:
-        class StreamWrapper:
+        plaintext_stream = ContentService.stream(
+            db=db,
+            principal=current_user,
+            document_id=doc.id,
+            version_id=version_to_restore.id,
+            request_id=request_id
+        )
+
+        class PlaintextStreamWrapper:
             def __init__(self, gen):
                 self.gen = gen
+                self.buf = bytearray()
             def read(self, size=-1):
-                try:
-                    return next(self.gen)
-                except StopIteration:
-                    return b""
+                if size == -1:
+                    chunks = list(self.gen)
+                    res = bytes(self.buf) + b"".join(chunks)
+                    self.buf = bytearray()
+                    return res
+                while len(self.buf) < size:
+                    try:
+                        chunk = next(self.gen)
+                        self.buf.extend(chunk)
+                    except StopIteration:
+                        break
+                data = bytes(self.buf[:size])
+                self.buf = self.buf[size:]
+                return data
 
-        gen = storage_service.read_file_stream(version_to_restore.storage_key)
-        storage_service.save_file(StreamWrapper(gen), new_storage_key)
-    except Exception:
-        storage_service.delete_file(new_storage_key)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to copy version payload.")
+        new_storage_key, total_bytes, checksum = ContentService.encrypt_and_store(
+            db=db,
+            principal=current_user,
+            document_id=doc.id,
+            version_id=restored_version_id,
+            file_obj=PlaintextStreamWrapper(plaintext_stream)
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to copy and re-encrypt version payload: {e}")
 
     max_ver = db.query(func.max(DocumentVersion.version_number)).filter(DocumentVersion.document_id == doc.id).scalar() or 0
     next_ver = max_ver + 1
@@ -922,12 +828,13 @@ def restore_document_version(
     db.query(DocumentVersion).filter(DocumentVersion.document_id == doc.id).update({"is_current": False})
 
     restored_version = DocumentVersion(
+        id=restored_version_id,
         document_id=doc.id,
         version_number=next_ver,
         storage_key=new_storage_key,
         original_filename=version_to_restore.original_filename,
-        file_size=version_to_restore.file_size,
-        checksum=version_to_restore.checksum,
+        file_size=total_bytes,
+        checksum=checksum,
         detected_media_type=version_to_restore.detected_media_type,
         change_summary=f"Restored from version {version_to_restore.version_number}",
         uploaded_by=current_user.id,
@@ -936,8 +843,8 @@ def restore_document_version(
     db.add(restored_version)
 
     doc.internal_storage_key = new_storage_key
-    doc.checksum = version_to_restore.checksum
-    doc.file_size = version_to_restore.file_size
+    doc.checksum = checksum
+    doc.file_size = total_bytes
     doc.original_filename = version_to_restore.original_filename
     doc.detected_media_type = version_to_restore.detected_media_type
     doc.updated_at = datetime.now(timezone.utc)

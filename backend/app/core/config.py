@@ -17,6 +17,22 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "trustvault_super_secure_secret_key_change_in_production_9988776655"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8 hours
+
+    # Key Management & Envelope Encryption (Phase 2)
+    KMS_PROVIDER: str = "local"  # "local", "aws_kms", "gcp_kms", "vault"
+    LOCAL_KEK: Optional[str] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # 256-bit hex KEK
+    AWS_KMS_KEY_ARN: Optional[str] = None
+    GCP_KMS_KEY_NAME: Optional[str] = None
+    VAULT_TRANSIT_KEY_NAME: Optional[str] = None
+
+    @field_validator("KMS_PROVIDER")
+    @classmethod
+    def validate_kms_provider(cls, v: str, info) -> str:
+        # Fail closed in production if local key provider is selected
+        env = info.data.get("ENVIRONMENT", "development") if hasattr(info, "data") else "development"
+        if env and str(env).lower() == "production" and str(v).lower() == "local":
+            raise ValueError("LocalDevKeyProvider is strictly prohibited when ENVIRONMENT=production. A production KMS provider must be configured.")
+        return v
     
     # Database
     DATABASE_URL: str = "sqlite:///./data/trustvault.db"

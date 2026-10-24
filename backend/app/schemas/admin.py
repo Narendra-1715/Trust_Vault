@@ -60,6 +60,15 @@ class AdminUserCreateRequest(BaseModel):
     is_active: bool = True
     mfa_enabled: bool = False
 
+class RotateKekRequest(BaseModel):
+    new_kek_id: str = Field(..., min_length=3, max_length=100)
+    new_kek_hex: Optional[str] = Field(None, min_length=64, max_length=64)
+
+class RotateKekResponse(BaseModel):
+    rotated_keys_count: int
+    new_kek_id: str
+
+
 class AdminUserDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
