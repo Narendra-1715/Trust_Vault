@@ -63,6 +63,7 @@ def build_document_response(doc: Document, user: User, db: Session) -> DocumentR
         checksum=doc.checksum,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
+        deleted_at=doc.deleted_at,
         effective_permission=eff_perm,
         current_version_number=current_ver,
         version_count=ver_count
@@ -305,6 +306,57 @@ def list_documents(
         db.query(Document)
         .filter(*base_filter)
         .order_by(order_clause)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    doc_responses = [build_document_response(d, current_user, db) for d in documents]
+    return DocumentListResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        documents=doc_responses
+    )
+
+@router.get("/trash", response_model=DocumentListResponse)
+def list_trashed_documents(
+    query: Optional[str] = Query(None, description="Search term for title, description, or filename"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lists soft-deleted documents.
+    - Regular users see only their own deleted documents.
+    - Administrators see all deleted documents across the organization.
+    Storage payload binaries were shredded upon deletion; metadata is preserved for audit trail.
+    """
+    base_filter = [Document.deleted_at.isnot(None)]
+
+    if current_user.role != "admin":
+        base_filter.append(Document.owner_id == current_user.id)
+
+    if query and query.strip():
+        search_term = f"%{query.strip()}%"
+        base_filter.append(
+            or_(
+                Document.title.ilike(search_term),
+                Document.description.ilike(search_term),
+                Document.original_filename.ilike(search_term)
+            )
+        )
+
+    if category and category.strip() and category.lower() != "all":
+        base_filter.append(Document.category.ilike(category.strip()))
+
+    total = db.query(Document).filter(*base_filter).count()
+    documents = (
+        db.query(Document)
+        .filter(*base_filter)
+        .order_by(Document.deleted_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

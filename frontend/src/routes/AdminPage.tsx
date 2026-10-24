@@ -570,7 +570,9 @@ export const AdminPage: React.FC = () => {
               <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--graphite)', marginTop: '0.125rem' }}>
                 {sysStatus.storage.backend.toUpperCase()} ({(sysStatus.storage.total_bytes / (1024 * 1024)).toFixed(2)} MB)
               </div>
-              <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>{sysStatus.storage.total_documents} objects encrypted</span>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>
+                {sysStatus.storage.total_documents} active • {sysStatus.storage.trashed_documents || 0} purged
+              </span>
             </div>
 
             <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)' }}>

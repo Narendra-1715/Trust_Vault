@@ -29,6 +29,7 @@ export interface DocumentItem {
   classification?: 'Internal' | 'Confidential' | 'Highly Restricted' | string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
   effective_permission: 'owner' | 'edit' | 'read' | 'admin' | 'none';
   current_version_number?: number;
   version_count?: number;
@@ -419,6 +420,7 @@ export interface SystemStatusResponse {
     status: string;
     backend: string;
     total_documents: number;
+    trashed_documents?: number;
     total_bytes: number;
   };
   background_jobs: {

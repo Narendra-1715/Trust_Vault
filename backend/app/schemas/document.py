@@ -28,6 +28,7 @@ class DocumentResponse(DocumentBase):
     checksum: str
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
     effective_permission: str  # "owner", "edit", "read", "none"
     current_version_number: Optional[int] = 1
     version_count: Optional[int] = 1

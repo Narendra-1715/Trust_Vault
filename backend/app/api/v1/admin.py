@@ -76,6 +76,7 @@ def get_system_status(
     # 2. Storage Health & Usage
     storage_healthy = True
     doc_count = db.query(Document).filter(Document.deleted_at.is_(None)).count()
+    trashed_docs_count = db.query(Document).filter(Document.deleted_at.isnot(None)).count()
     total_bytes = db.query(text("COALESCE(SUM(file_size), 0)")).select_from(Document).scalar() or 0
     storage_backend = "s3" if hasattr(storage_service, "bucket") else "local"
 
@@ -114,6 +115,7 @@ def get_system_status(
             "status": "connected" if storage_healthy else "disconnected",
             "backend": storage_backend,
             "total_documents": doc_count,
+            "trashed_documents": trashed_docs_count,
             "total_bytes": total_bytes
         },
         background_jobs={

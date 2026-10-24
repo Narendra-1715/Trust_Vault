@@ -200,6 +200,21 @@ export const api = {
     return request<DocumentListResponse>(`/documents?${searchParams.toString()}`);
   },
 
+  listTrashedDocuments: (params?: {
+    query?: string;
+    category?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.query) searchParams.append('query', params.query);
+    if (params?.category && params.category !== 'all') searchParams.append('category', params.category);
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.page_size) searchParams.append('page_size', params.page_size.toString());
+    const qs = searchParams.toString();
+    return request<DocumentListResponse>(`/documents/trash${qs ? `?${qs}` : ''}`);
+  },
+
   getDocument: (id: string) => request<DocumentItem>(`/documents/${id}`),
 
   uploadDocument: async (formData: FormData) => {

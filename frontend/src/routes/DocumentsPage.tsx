@@ -14,7 +14,12 @@ import {
   SlidersHorizontal,
   RotateCcw,
   Calendar,
-  ArrowUpDown
+  ArrowUpDown,
+  Trash2,
+  Clock,
+  ShieldAlert,
+  X,
+  History
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -35,6 +40,10 @@ export const DocumentsPage: React.FC = () => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'active' | 'trash'>('active');
+  const [inspectingTrashedDoc, setInspectingTrashedDoc] = useState<DocumentItem | null>(null);
+  const [docAuditEvents, setDocAuditEvents] = useState<any[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
 
   const activeFiltersCount = (selectedCategory !== 'all' ? 1 : 0) +
     (fileType !== 'all' ? 1 : 0) +
@@ -67,6 +76,27 @@ export const DocumentsPage: React.FC = () => {
       date_to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
     }),
   });
+
+  const { data: trashedData, isLoading: isLoadingTrash } = useQuery({
+    queryKey: ['trashedDocuments', searchTerm, selectedCategory],
+    queryFn: () => api.listTrashedDocuments({
+      query: searchTerm || undefined,
+      category: selectedCategory !== 'all' ? selectedCategory : undefined,
+    }),
+  });
+
+  const handleInspectAudit = async (doc: DocumentItem) => {
+    setInspectingTrashedDoc(doc);
+    setIsLoadingAudit(true);
+    try {
+      const res = await api.listAuditEvents({ document_id: doc.id });
+      setDocAuditEvents(res.events || []);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load audit events');
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
 
   const handleDownload = async (e: React.MouseEvent, doc: DocumentItem) => {
     e.stopPropagation();
@@ -262,6 +292,72 @@ export const DocumentsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ================= REPOSITORY VIEW TABS ================= */}
+      <div style={{ display: 'flex', gap: '0.625rem', marginBottom: '1rem', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('active')}
+          className={`btn ${activeTab === 'active' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{
+            fontSize: '0.8125rem',
+            padding: '0.45rem 1rem',
+            gap: '0.4rem',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <FileText size={15} />
+          <span>Active Repository</span>
+          {data?.total !== undefined && (
+            <span
+              className="badge"
+              style={{
+                backgroundColor: activeTab === 'active' ? 'rgba(0,0,0,0.2)' : 'var(--bg-card)',
+                color: activeTab === 'active' ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.6875rem',
+                padding: '0.1rem 0.35rem',
+                marginLeft: '0.25rem',
+              }}
+            >
+              {data.total}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('trash')}
+          className={`btn ${activeTab === 'trash' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{
+            fontSize: '0.8125rem',
+            padding: '0.45rem 1rem',
+            gap: '0.4rem',
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: activeTab === 'trash' ? 'var(--danger)' : undefined,
+            borderColor: activeTab === 'trash' ? 'var(--danger)' : undefined,
+            color: activeTab === 'trash' ? '#fff' : undefined,
+          }}
+        >
+          <Trash2 size={15} />
+          <span>Trash & Purged Documents</span>
+          {trashedData?.total !== undefined && (
+            <span
+              className="badge"
+              style={{
+                backgroundColor: activeTab === 'trash' ? 'rgba(0,0,0,0.25)' : 'var(--bg-card)',
+                color: activeTab === 'trash' ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.6875rem',
+                padding: '0.1rem 0.35rem',
+                marginLeft: '0.25rem',
+              }}
+            >
+              {trashedData.total}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* ================= SEARCH & FILTER CONTROLS ================= */}
       <div className="panel" style={{ padding: '0.875rem 1rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -437,145 +533,362 @@ export const DocumentsPage: React.FC = () => {
         )}
       </div>
 
-      {/* ================= DOCUMENTS TABLE ================= */}
-      {isLoading ? (
-        <div className="panel" style={{ textAlign: 'center', padding: '3.5rem', color: 'var(--text-muted)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '10px', height: '10px' }}></span>
-            <span style={{ fontSize: '0.875rem' }}>Loading authorized documents...</span>
-          </div>
-        </div>
-      ) : data?.documents && data.documents.length > 0 ? (
-        <div className="table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: '35%' }}>Document</th>
-                <th>Classification</th>
-                <th>Owner</th>
-                <th>File Size</th>
-                <th>Uploaded</th>
-                <th>Your Access</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.documents.map((doc) => (
-                <tr key={doc.id}>
-                  <td>
-                    <Link
-                      to={`/documents/${doc.id}`}
-                      style={{
-                        fontWeight: 600,
-                        color: 'var(--graphite)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <FileText size={16} color="var(--copper-dark)" />
-                      <span>{doc.title}</span>
-                    </Link>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem', fontFamily: 'var(--font-mono)' }}>
-                      {doc.original_filename}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
-                      <span className="badge badge-gray">{doc.category}</span>
-                      {doc.classification && (
+      {/* ================= ACTIVE DOCUMENTS VIEW ================= */}
+      {activeTab === 'active' && (
+        <>
+          {isLoading ? (
+            <div className="panel" style={{ textAlign: 'center', padding: '3.5rem', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="pulse-dot" style={{ backgroundColor: 'var(--copper)', width: '10px', height: '10px' }}></span>
+                <span style={{ fontSize: '0.875rem' }}>Loading authorized documents...</span>
+              </div>
+            </div>
+          ) : data?.documents && data.documents.length > 0 ? (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '35%' }}>Document</th>
+                    <th>Classification</th>
+                    <th>Owner</th>
+                    <th>File Size</th>
+                    <th>Uploaded</th>
+                    <th>Your Access</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>
+                        <Link
+                          to={`/documents/${doc.id}`}
+                          style={{
+                            fontWeight: 600,
+                            color: 'var(--graphite)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <FileText size={16} color="var(--copper-dark)" />
+                          <span>{doc.title}</span>
+                        </Link>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem', fontFamily: 'var(--font-mono)' }}>
+                          {doc.original_filename}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                          <span className="badge badge-gray">{doc.category}</span>
+                          {doc.classification && (
+                            <span className={`badge ${
+                              doc.classification === 'Highly Restricted' 
+                                ? 'badge-danger' 
+                                : doc.classification === 'Confidential' 
+                                  ? 'badge-copper' 
+                                  : 'badge-secondary'
+                            }`} style={{ fontSize: '0.675rem', padding: '0.1rem 0.35rem' }}>
+                              {doc.classification}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {doc.owner_name}
+                        </div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                          {doc.owner_email}
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                        {formatFileSize(doc.file_size)}
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </td>
+                      <td>
                         <span className={`badge ${
-                          doc.classification === 'Highly Restricted' 
-                            ? 'badge-danger' 
-                            : doc.classification === 'Confidential' 
-                              ? 'badge-copper' 
-                              : 'badge-secondary'
-                        }`} style={{ fontSize: '0.675rem', padding: '0.1rem 0.35rem' }}>
-                          {doc.classification}
+                          doc.effective_permission === 'owner' 
+                            ? 'badge-green' 
+                            : doc.effective_permission === 'edit'
+                            ? 'badge-copper'
+                            : 'badge-gray'
+                        }`} style={{ textTransform: 'capitalize' }}>
+                          {doc.effective_permission === 'owner' ? 'Owner' : `${doc.effective_permission} Access`}
                         </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>
-                      {doc.owner_name}
-                    </div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                      {doc.owner_email}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                    {formatFileSize(doc.file_size)}
-                  </td>
-                  <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                    {new Date(doc.created_at).toLocaleDateString()}
-                  </td>
-                  <td>
-                    <span className={`badge ${
-                      doc.effective_permission === 'owner' 
-                        ? 'badge-green' 
-                        : doc.effective_permission === 'edit'
-                        ? 'badge-copper'
-                        : 'badge-gray'
-                    }`} style={{ textTransform: 'capitalize' }}>
-                      {doc.effective_permission === 'owner' ? 'Owner' : `${doc.effective_permission} Access`}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
-                      <Link
-                        to={`/documents/${doc.id}`}
-                        className="btn btn-secondary btn-sm"
-                        title="View details & sharing settings"
-                      >
-                        <Eye size={13} color="var(--text-secondary)" />
-                        <span>View</span>
-                      </Link>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.375rem' }}>
+                          <Link
+                            to={`/documents/${doc.id}`}
+                            className="btn btn-secondary btn-sm"
+                            title="View details & sharing settings"
+                          >
+                            <Eye size={13} color="var(--text-secondary)" />
+                            <span>View</span>
+                          </Link>
 
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={(e) => handleDownload(e, doc)}
-                        disabled={downloadingId === doc.id}
-                        title="Stream authorized file"
-                      >
-                        <Download size={13} color="var(--text-secondary)" />
-                        <span>{downloadingId === doc.id ? 'Streaming...' : 'Download'}</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="panel" style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--bg-surface-secondary)',
-            border: '1px solid var(--border)',
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => handleDownload(e, doc)}
+                            disabled={downloadingId === doc.id}
+                            title="Stream authorized file"
+                          >
+                            <Download size={13} color="var(--text-secondary)" />
+                            <span>{downloadingId === doc.id ? 'Streaming...' : 'Download'}</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="panel" style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--bg-surface-secondary)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-muted)',
+                margin: '0 auto 1rem',
+              }}>
+                <Lock size={24} />
+              </div>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--graphite)', marginBottom: '0.375rem' }}>
+                No authorized documents found
+              </h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1.5rem', lineHeight: 1.5 }}>
+                {searchTerm || selectedCategory !== 'all'
+                  ? 'No documents matched your search filter in your authorized scope.'
+                  : 'You have not uploaded any documents and no other document owners have granted you access yet.'}
+              </p>
+              <button className="btn btn-primary" onClick={() => setIsUploadOpen(true)}>
+                <Plus size={15} color="var(--copper)" />
+                <span>Upload your first document</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ================= TRASH / PURGED DOCUMENTS VIEW ================= */}
+      {activeTab === 'trash' && (
+        <>
+          <div className="panel" style={{
+            padding: '0.875rem 1.125rem',
+            marginBottom: '1.25rem',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-muted)',
-            margin: '0 auto 1rem',
+            gap: '0.875rem',
+            backgroundColor: 'rgba(239, 68, 68, 0.05)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: 'var(--radius-md)',
           }}>
-            <Lock size={24} />
+            <ShieldAlert size={20} color="var(--danger)" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--danger)' }}>Confidential Shredding & Audit Preservation: </strong>
+              When documents are deleted, their underlying binary objects are immediately and irreversibly shredded from private S3 object storage to prevent data leakage. Metadata and cryptographic audit trail records are retained for compliance and incident investigations.
+            </div>
           </div>
-          <h3 style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--graphite)', marginBottom: '0.375rem' }}>
-            No authorized documents found
-          </h3>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1.5rem', lineHeight: 1.5 }}>
-            {searchTerm || selectedCategory !== 'all'
-              ? 'No documents matched your search filter in your authorized scope.'
-              : 'You have not uploaded any documents and no other document owners have granted you access yet.'}
-          </p>
-          <button className="btn btn-primary" onClick={() => setIsUploadOpen(true)}>
-            <Plus size={15} color="var(--copper)" />
-            <span>Upload your first document</span>
-          </button>
+
+          {isLoadingTrash ? (
+            <div className="panel" style={{ textAlign: 'center', padding: '3.5rem', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="pulse-dot" style={{ backgroundColor: 'var(--danger)', width: '10px', height: '10px' }}></span>
+                <span style={{ fontSize: '0.875rem' }}>Loading deleted documents archive...</span>
+              </div>
+            </div>
+          ) : trashedData?.documents && trashedData.documents.length > 0 ? (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '32%' }}>Document</th>
+                    <th>Classification</th>
+                    <th>Owner</th>
+                    <th>Original Size</th>
+                    <th>Deleted On</th>
+                    <th>Storage State</th>
+                    <th style={{ textAlign: 'right' }}>Audit Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trashedData.documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <FileText size={16} color="var(--text-muted)" />
+                          <span style={{ textDecoration: 'line-through', color: 'var(--text-secondary)' }}>{doc.title}</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem', fontFamily: 'var(--font-mono)' }}>
+                          {doc.original_filename}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                          <span className="badge badge-gray">{doc.category}</span>
+                          {doc.classification && (
+                            <span className="badge badge-secondary" style={{ fontSize: '0.675rem', padding: '0.1rem 0.35rem' }}>
+                              {doc.classification}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {doc.owner_name || 'Owner'}
+                        </div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                          {doc.owner_email}
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                        {formatFileSize(doc.file_size)}
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Clock size={12} color="var(--text-muted)" />
+                          <span>{doc.deleted_at ? new Date(doc.deleted_at).toLocaleString() : 'Deleted'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem' }}>
+                          <Lock size={10} />
+                          <span>Purged from Storage</span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleInspectAudit(doc)}
+                          style={{ fontSize: '0.75rem', gap: '0.25rem' }}
+                        >
+                          <History size={13} color="var(--copper-dark)" />
+                          <span>Inspect Audit</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="panel" style={{ textAlign: 'center', padding: '4rem 1.5rem' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--bg-surface-secondary)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-muted)',
+                margin: '0 auto 1rem',
+              }}>
+                <Trash2 size={24} />
+              </div>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--graphite)', marginBottom: '0.375rem' }}>
+                No deleted documents
+              </h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
+                There are currently no soft-deleted documents in your authorized repository.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ================= TRASH AUDIT INSPECTION MODAL ================= */}
+      {inspectingTrashedDoc && (
+        <div className="modal-backdrop" onClick={() => setInspectingTrashedDoc(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0, color: 'var(--graphite)' }}>
+                  Audit Trail: {inspectingTrashedDoc.title}
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.25rem' }}>
+                  ID: {inspectingTrashedDoc.id}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setInspectingTrashedDoc(null)}
+                style={{ padding: '0.25rem 0.5rem' }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: 'var(--bg-surface-secondary)', borderRadius: 'var(--radius-sm)', fontSize: '0.8125rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+                <div><strong>Classification:</strong> {inspectingTrashedDoc.classification || 'Internal'}</div>
+                <div><strong>Category:</strong> {inspectingTrashedDoc.category}</div>
+                <div><strong>Owner:</strong> {inspectingTrashedDoc.owner_email || inspectingTrashedDoc.owner_id}</div>
+                <div><strong>Deleted At:</strong> {inspectingTrashedDoc.deleted_at ? new Date(inspectingTrashedDoc.deleted_at).toLocaleString() : 'N/A'}</div>
+              </div>
+            </div>
+
+            <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Recorded Audit Events
+            </h4>
+
+            {isLoadingAudit ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                Loading audit trail...
+              </div>
+            ) : docAuditEvents.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {docAuditEvents.map((ev: any) => (
+                  <div key={ev.id} style={{
+                    padding: '0.75rem',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: ev.action === 'document.delete' ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-card)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span className={`badge ${ev.action === 'document.delete' ? 'badge-danger' : 'badge-copper'}`} style={{ fontSize: '0.75rem' }}>
+                        {ev.action}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {new Date(ev.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                      <strong>Actor:</strong> {ev.actor?.email || ev.actor_id || 'System'}
+                      {ev.ip_address && <span style={{ marginLeft: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>IP: {ev.ip_address}</span>}
+                    </div>
+                    {ev.metadata && Object.keys(ev.metadata).length > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>
+                        {JSON.stringify(ev.metadata)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                No direct audit events found for this resource ID.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setInspectingTrashedDoc(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

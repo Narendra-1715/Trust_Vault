@@ -50,6 +50,27 @@ def test_document_deletion_removes_private_file(client: TestClient, test_users):
     assert client.get(f"/api/v1/documents/{doc_id}", headers=headers).status_code == 404
     assert client.get(f"/api/v1/documents/{doc_id}/download", headers=headers).status_code == 404
 
+    # Verify document appears in owner's trash archive with deleted_at populated
+    trash_res = client.get("/api/v1/documents/trash", headers=headers)
+    assert trash_res.status_code == 200
+    trashed_docs = trash_res.json()["documents"]
+    matching = [d for d in trashed_docs if d["id"] == doc_id]
+    assert len(matching) == 1
+    assert matching[0]["deleted_at"] is not None
+    assert matching[0]["title"] == "To Delete"
+
+    # Unrelated viewer cannot see owner's trashed document
+    viewer_headers = get_auth_headers(client, "viewer_a@test.com", "ViewerAPass123!")
+    viewer_trash = client.get("/api/v1/documents/trash", headers=viewer_headers)
+    assert viewer_trash.status_code == 200
+    assert not any(d["id"] == doc_id for d in viewer_trash.json()["documents"])
+
+    # Administrator can inspect organization-wide trashed documents
+    admin_headers = get_auth_headers(client, "admin@test.com", "AdminPass123!")
+    admin_trash = client.get("/api/v1/documents/trash", headers=admin_headers)
+    assert admin_trash.status_code == 200
+    assert any(d["id"] == doc_id for d in admin_trash.json()["documents"])
+
 def test_missing_storage_file_fails_safely_without_silent_fabrication(client: TestClient, test_users, test_db_session, test_storage):
     """Verifies that missing storage objects produce visible 500 errors rather than silently fabricating fake bytes."""
     from app.models.document import Document
