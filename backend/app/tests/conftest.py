@@ -49,18 +49,40 @@ def test_db_session(test_temp_dir):
         from sqlalchemy import text
         engine = create_engine(pg_url, pool_pre_ping=True)
         Base.metadata.create_all(bind=engine)
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE OR REPLACE VIEW ai_document_metadata_view AS
+                SELECT
+                    id,
+                    owner_id,
+                    title,
+                    original_filename,
+                    file_size,
+                    category,
+                    classification,
+                    detected_media_type,
+                    checksum,
+                    created_at,
+                    updated_at
+                FROM documents
+                WHERE deleted_at IS NULL;
+            """))
+            conn.commit()
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         session = TestingSessionLocal()
         try:
             yield session
         finally:
-            session.rollback()
+            try:
+                session.rollback()
+            except Exception:
+                pass
             session.close()
             with engine.connect() as conn:
-                conn.execute(text("DROP VIEW IF EXISTS ai_document_metadata_view CASCADE;"))
-                for table in reversed(Base.metadata.sorted_tables):
-                    conn.execute(text(f'DROP TABLE IF EXISTS "{table.name}" CASCADE;'))
-                conn.commit()
+                table_names = [f'"{table.name}"' for table in Base.metadata.sorted_tables]
+                if table_names:
+                    conn.execute(text(f"TRUNCATE TABLE {', '.join(table_names)} RESTART IDENTITY CASCADE;"))
+                    conn.commit()
             engine.dispose()
     else:
         db_file = os.path.join(test_temp_dir, f"test_{os.urandom(4).hex()}.db")
@@ -125,11 +147,6 @@ def client(test_db_session, test_storage):
     """FastAPI TestClient with overridden get_db dependency."""
     def override_get_db():
         try:
-            if not test_db_session.is_active:
-                test_db_session.rollback()
-        except Exception:
-            pass
-        try:
             yield test_db_session
         except Exception:
             try:
@@ -139,8 +156,7 @@ def client(test_db_session, test_storage):
             raise
         finally:
             try:
-                if not test_db_session.is_active:
-                    test_db_session.rollback()
+                test_db_session.rollback()
             except Exception:
                 pass
 

@@ -24,6 +24,12 @@ from app.models.notification import SecurityNotification
 from app.models.access_request import AccessRequest
 from app.models.request_link import DocumentRequestLink
 from app.models.security_alert import SecurityAlert
+from app.models.document_key import DocumentKey
+from app.models.document_version import DocumentVersion
+from app.models.access_review import AccessReview
+from app.models.emergency_access import EmergencyAccess
+from app.models.security_policy import SecurityPolicy
+from app.models.system_setting import SystemSetting
 from app.storage.local import storage_service
 from app.audit.verifier import verify_audit_integrity
 from app.audit.service import log_audit_event
@@ -380,7 +386,11 @@ def execute_restore(
 
         tables = db_export.get("tables", {})
 
-        # Clear existing tables in reverse dependency order
+        # Clear existing tables in strict reverse dependency order to satisfy PostgreSQL foreign keys
+        db.query(DocumentKey).delete()
+        db.query(DocumentVersion).delete()
+        db.query(EmergencyAccess).delete()
+        db.query(AccessReview).delete()
         db.query(SecurityAlert).delete()
         db.query(DocumentRequestLink).delete()
         db.query(AccessRequest).delete()
