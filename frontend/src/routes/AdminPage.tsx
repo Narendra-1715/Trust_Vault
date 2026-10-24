@@ -19,7 +19,8 @@ import {
   UserPlus,
   Flame,
   KeyRound,
-  RotateCcw
+  RotateCcw,
+  Edit2
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../features/auth/AuthContext';
@@ -193,9 +194,14 @@ export const AdminPage: React.FC = () => {
     onSuccess: (updated) => {
       refetchSettings();
       toast.success(`Setting '${updated.key}' updated to '${updated.value}'.`);
+      setEditingSetting(null);
     },
     onError: (err: any) => toast.error(err.message || 'Failed to update setting'),
   });
+
+  // Edit System Setting Modal state
+  const [editingSetting, setEditingSetting] = useState<{ key: string; value: string; description?: string } | null>(null);
+  const [editingSettingValue, setEditingSettingValue] = useState('');
 
   // Provision User Modal state
   const [showProvisionModal, setShowProvisionModal] = useState(false);
@@ -1177,7 +1183,20 @@ export const AdminPage: React.FC = () => {
                 <tr key={s.key}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{s.key}</td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{s.description}</td>
-                  <td style={{ fontWeight: 600 }}>{s.value}</td>
+                  <td>
+                    {s.key === 'mfa_enforced_for_admins' ? (
+                      s.value === 'true' ? (
+                        <span className="badge badge-green">ENABLED</span>
+                      ) : (
+                        <span className="badge badge-yellow">DISABLED</span>
+                      )
+                    ) : (
+                      <span style={{ fontWeight: 600 }}>
+                        {s.value}
+                        {s.key.includes('minutes') ? ' mins' : s.key.includes('days') ? ' days' : s.key.includes('logins') ? ' attempts' : ''}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                     {formatTimestamp(s.updated_at)}
                   </td>
@@ -1186,14 +1205,13 @@ export const AdminPage: React.FC = () => {
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => {
-                        const newVal = prompt(`Enter new value for ${s.key}:`, s.value);
-                        if (newVal !== null && newVal.trim() !== '') {
-                          updateSettingMutation.mutate({ key: s.key, value: newVal.trim() });
-                        }
+                        setEditingSetting(s);
+                        setEditingSettingValue(s.value);
                       }}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                     >
-                      Edit Value
+                      <Edit2 size={12} />
+                      <span>Edit Value</span>
                     </button>
                   </td>
                 </tr>
@@ -1496,7 +1514,7 @@ export const AdminPage: React.FC = () => {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowBreakGlassModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-danger" disabled={isActivatingBg || !bgDocId}>
+                <button type="submit" className="btn btn-danger-solid" disabled={isActivatingBg || !bgDocId}>
                   {isActivatingBg ? 'Authenticating & Activating...' : 'Confirm Break-Glass Access'}
                 </button>
               </div>
@@ -1609,7 +1627,7 @@ export const AdminPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-danger"
+                  className="btn btn-danger-solid"
                   disabled={isRestoring || restoreConfirmation !== 'RESTORE_DATABASE' || !restorePassword}
                 >
                   {isRestoring ? 'Restoring System...' : 'Execute Authorized Restore'}
@@ -1698,6 +1716,199 @@ export const AdminPage: React.FC = () => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit System Setting Modal */}
+      {editingSetting && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem',
+          backdropFilter: 'blur(3px)',
+        }}>
+          <div className="panel" style={{
+            maxWidth: '480px',
+            width: '100%',
+            padding: '1.75rem',
+            backgroundColor: 'var(--bg-surface)',
+            boxShadow: 'var(--shadow-xl)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border)',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--copper-light)',
+                  border: '1px solid var(--copper-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--copper-dark)',
+                  flexShrink: 0,
+                }}>
+                  <Sliders size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0, color: 'var(--graphite)' }}>
+                    Edit Platform Configuration
+                  </h3>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>
+                    Modifications are logged to the immutable audit ledger.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditingSetting(null)}
+                style={{ padding: '0.2rem 0.4rem', color: 'var(--text-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Details Box */}
+            <div style={{
+              backgroundColor: 'var(--bg-surface-secondary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.75rem 1rem',
+              marginBottom: '1.25rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>KEY:</span>
+                <code style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--copper-dark)', fontFamily: 'var(--font-mono)' }}>
+                  {editingSetting.key}
+                </code>
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                {editingSetting.description}
+              </div>
+            </div>
+
+            {/* Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingSettingValue.trim() === '') return;
+                updateSettingMutation.mutate({
+                  key: editingSetting.key,
+                  value: editingSettingValue.trim(),
+                });
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+            >
+              <div>
+                <label className="form-label" style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+                  Configuration Value
+                </label>
+
+                {editingSetting.key === 'mfa_enforced_for_admins' ? (
+                  <select
+                    className="input-field"
+                    value={editingSettingValue}
+                    onChange={(e) => setEditingSettingValue(e.target.value)}
+                    style={{ fontSize: '0.875rem' }}
+                  >
+                    <option value="true">Enforced (true) - Mandatory MFA for all administrators</option>
+                    <option value="false">Optional (false) - Single-factor password authentication permitted</option>
+                  </select>
+                ) : editingSetting.key.includes('minutes') ? (
+                  <div>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={editingSettingValue}
+                      onChange={(e) => setEditingSettingValue(e.target.value)}
+                      min={5}
+                      max={1440}
+                      step={5}
+                      required
+                      style={{ fontSize: '0.875rem' }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.375rem' }}>
+                      Duration in minutes (e.g. 60 = 1 hour, 120 = 2 hours, 480 = 8 hours).
+                    </span>
+                  </div>
+                ) : editingSetting.key.includes('days') ? (
+                  <div>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={editingSettingValue}
+                      onChange={(e) => setEditingSettingValue(e.target.value)}
+                      min={1}
+                      max={3650}
+                      step={1}
+                      required
+                      style={{ fontSize: '0.875rem' }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.375rem' }}>
+                      Retention duration in days (e.g. 30, 90, 365 days).
+                    </span>
+                  </div>
+                ) : editingSetting.key.includes('logins') ? (
+                  <div>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={editingSettingValue}
+                      onChange={(e) => setEditingSettingValue(e.target.value)}
+                      min={1}
+                      max={20}
+                      step={1}
+                      required
+                      style={{ fontSize: '0.875rem' }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.375rem' }}>
+                      Consecutive failures before alert triggering (recommended 3 to 10).
+                    </span>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingSettingValue}
+                    onChange={(e) => setEditingSettingValue(e.target.value)}
+                    required
+                    style={{ fontSize: '0.875rem' }}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingSetting(null)}
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={updateSettingMutation.isPending || editingSettingValue.trim() === ''}
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  {updateSettingMutation.isPending ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
