@@ -20,17 +20,25 @@ from app.services.authorization import AuthorizationService, Action
 from app.audit.verifier import verify_audit_integrity
 from app.audit.service import log_audit_event
 
+from app.storage.local import sanitize_content_disposition_filename
+
 router = APIRouter()
 
 def sanitize_csv_cell(value: Any) -> str:
     """
-    Prevents CSV Formula Injection (DDE attacks).
-    Prepends a single quote if the field begins with =, +, -, @, \\t, or \\r.
+    Prevents CSV / Spreadsheet Formula Injection (DDE attacks).
+    Phase 8 security requirement:
+    Prepends a single quote if the field begins with =, +, -, @, \\t, or \\r,
+    even if preceded by leading whitespace.
     """
     if value is None:
         return ""
     text = str(value)
-    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+    if not text:
+        return ""
+    # Check leading character or first non-space character
+    stripped = text.lstrip(" ")
+    if stripped and stripped[0] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + text
     return text
 
@@ -252,11 +260,18 @@ def export_audit_log(
             for e in events
         ]
         json_bytes = json.dumps(export_data, indent=2).encode("utf-8")
-        filename = f"trustvault_audit_{now_str}.json"
+        safe_filename = sanitize_content_disposition_filename(f"trustvault_audit_{now_str}.json")
+        headers = {
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin"
+        }
         return StreamingResponse(
             io.BytesIO(json_bytes),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers=headers
         )
 
     # Default CSV export with formula injection mitigation
@@ -298,9 +313,16 @@ def export_audit_log(
         ])
 
     csv_bytes = output.getvalue().encode("utf-8")
-    filename = f"trustvault_audit_{now_str}.csv"
+    safe_filename = sanitize_content_disposition_filename(f"trustvault_audit_{now_str}.csv")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        "Cache-Control": "no-store, private",
+        "Pragma": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "same-origin"
+    }
     return StreamingResponse(
         io.BytesIO(csv_bytes),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers=headers
     )

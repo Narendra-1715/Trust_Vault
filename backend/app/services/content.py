@@ -132,7 +132,8 @@ class ContentService:
         version_id: Optional[str] = None,
         request_id: Optional[str] = None,
         revalidate_chunks: int = 10,
-        revalidate_seconds: float = 2.0
+        revalidate_seconds: float = 2.0,
+        action: Action = Action.DOWNLOAD
     ) -> Generator[bytes, None, None]:
         """
         Authenticated decryption streaming:
@@ -161,13 +162,14 @@ class ContentService:
                 version_id = version.id
 
         context = {"version_number": version.version_number} if version else None
-        decision = AuthorizationService.decide(db, principal, Action.DOWNLOAD, document_id, context)
+        decision = AuthorizationService.decide(db, principal, action, document_id, context)
         if not decision.allowed:
             actor_id = principal.id if principal else None
             try:
+                denied_action_name = "document.view.denied" if action == Action.VIEW else "document.download.denied"
                 log_audit_event(
                     db=db,
-                    action="document.download.denied",
+                    action=denied_action_name,
                     resource_type="document",
                     resource_id=document_id,
                     outcome="denied",
@@ -363,14 +365,14 @@ class ContentService:
                         midstream_decision = AuthorizationService.decide(
                             db=db,
                             principal=principal,
-                            action=Action.DOWNLOAD,
+                            action=action,
                             resource_id=document_id,
                             context=context
                         )
                         if not midstream_decision.allowed:
                             log_audit_event(
                                 db=db,
-                                action="document.download.revoked_mid_stream",
+                                action="document.view.revoked_mid_stream" if action == Action.VIEW else "document.download.revoked_mid_stream",
                                 resource_type="document",
                                 resource_id=document_id,
                                 outcome="denied",
@@ -399,6 +401,33 @@ class ContentService:
                     raise HTTPException(status_code=500, detail="Data integrity check failed: Checksum mismatch.")
 
         return decrypt_generator()
+
+    @classmethod
+    def get_decrypted_content(
+        cls,
+        db: Session,
+        principal: Optional[User],
+        document_id: str,
+        version_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        action: Action = Action.VIEW
+    ) -> bytes:
+        """
+        Retrieves fully decrypted document bytes, enforcing central authorization.
+        Used by the server-side Sandboxed Document Preview pipeline.
+        """
+        stream_gen = cls.stream(
+            db=db,
+            principal=principal,
+            document_id=document_id,
+            version_id=version_id,
+            request_id=request_id,
+            action=action
+        )
+        content_buf = bytearray()
+        for chunk in stream_gen:
+            content_buf.extend(chunk)
+        return bytes(content_buf)
 
     @classmethod
     def crypto_shred(cls, db: Session, document_id: str, version_id: Optional[str] = None, actor_id: Optional[str] = None) -> int:

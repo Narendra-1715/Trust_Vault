@@ -142,6 +142,26 @@ def sanitize_filename(filename: str) -> str:
     clean = clean.strip(". ")
     return clean if clean else "document.bin"
 
+def sanitize_content_disposition_filename(filename: str) -> str:
+    """
+    Sanitizes filename for Content-Disposition headers (RFC 6266 / Phase 8 security requirement).
+    Strictly eliminates:
+    - Path separators (/ and \\)
+    - Directory traversal sequences (..)
+    - Null bytes (\\0)
+    - Control characters (\\x00-\\x1f, \\x7f)
+    - Double quotes, single quotes, backticks, semicolons, equal signs
+    - Header injection characters (\\r, \\n)
+    Returns an unexploitable safe filename, defaulting to 'document.bin'.
+    """
+    if not filename:
+        return "document.bin"
+    clean = filename.replace("\\", "/").split("/")[-1]
+    clean = re.sub(r'[\x00-\x1f\x7f\"\'`;\\/<>|?*%$:=]', "", clean)
+    clean = re.sub(r'\.{2,}', "", clean)
+    clean = clean.strip(". ")
+    return clean if clean else "document.bin"
+
 def validate_file_content(header_bytes: bytes, extension: str, content_type: str) -> None:
     """
     Validates file extension, MIME type, and magic bytes where applicable.

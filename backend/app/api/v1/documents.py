@@ -1,4 +1,5 @@
 import os
+import io
 import uuid
 import hashlib
 from datetime import datetime, timezone
@@ -20,9 +21,11 @@ from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
 from app.services.authorization import AuthorizationService, Action, raise_not_found, get_admin_metadata_view
 from app.services.content import ContentService
+from app.services.preview import DocumentPreviewService
 from app.storage.local import (
     storage_service,
     sanitize_filename,
+    sanitize_content_disposition_filename,
     validate_file_content
 )
 from app.core.config import settings
@@ -410,7 +413,7 @@ def download_document(
         metadata={"filename": doc.original_filename, "checksum": doc.checksum}
     )
 
-    safe_name = doc.original_filename.replace('"', '\\"')
+    safe_name = sanitize_content_disposition_filename(doc.original_filename)
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",
@@ -423,6 +426,71 @@ def download_document(
     return StreamingResponse(
         stream_gen,
         media_type=doc.detected_media_type,
+        headers=headers
+    )
+
+@router.get("/{document_id}/preview-info")
+def get_document_preview_info(
+    document_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Returns pagination and rendering metadata for document preview.
+    Enforces Action.VIEW authorization (allowed for preview, view, read, edit, owner).
+    """
+    request_id = get_request_id(request)
+    return DocumentPreviewService.get_preview_info(
+        db=db,
+        principal=current_user,
+        document_id=document_id,
+        request_id=request_id
+    )
+
+@router.get("/{document_id}/pages/{page_num}")
+def get_document_page_preview(
+    document_id: str,
+    page_num: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Authorized Sandboxed Document Page Preview (Phase 8):
+    - Converted to raster PNG image server-side in isolated memory pipeline.
+    - Raw PDF/DOCX bytes are NEVER returned or exposed to client browser.
+    - Dynamic forensic watermarking (requester email, UTC timestamp, request ID) burned into pixel array.
+    - Strict Content Security Policy (CSP) blocking script execution and objects.
+    - Enforces Action.VIEW (viewers/previewers can view, but cannot download).
+    """
+    request_id = get_request_id(request)
+    png_bytes, total_pages = DocumentPreviewService.render_page(
+        db=db,
+        principal=current_user,
+        document_id=document_id,
+        page_num=page_num,
+        request_id=request_id
+    )
+
+    headers = {
+        "Content-Type": "image/png",
+        "Content-Disposition": f'inline; filename="preview-page-{page_num}.png"',
+        "Cache-Control": "no-store, private",
+        "Pragma": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox; frame-ancestors 'none'",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-TrustVault-Page": str(page_num),
+        "X-TrustVault-Total-Pages": str(total_pages),
+        "X-TrustVault-Watermark": "applied",
+        "Content-Length": str(len(png_bytes))
+    }
+
+    return StreamingResponse(
+        io.BytesIO(png_bytes),
+        media_type="image/png",
         headers=headers
     )
 
@@ -724,7 +792,7 @@ def download_document_version(
         request_id=request_id
     )
 
-    safe_name = version.original_filename.replace('"', '\\"')
+    safe_name = sanitize_content_disposition_filename(version.original_filename)
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",

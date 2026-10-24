@@ -17,7 +17,6 @@ import {
   Copy,
   CheckCircle,
   Clock,
-  FileCode,
   Link2,
   Plus,
   Ban,
@@ -28,7 +27,9 @@ import {
   AlertTriangle,
   XCircle,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { api, clearAuthToken } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -102,14 +103,13 @@ export const DocumentDetailPage: React.FC = () => {
   const [isMock, setIsMock] = useState<boolean>(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // Secure In-Browser Preview state
+  // Secure In-Browser Preview state (Phase 8: Sandboxed Raster & Watermark)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
-  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewCurrentPage, setPreviewCurrentPage] = useState(1);
+  const [previewTotalPages, setPreviewTotalPages] = useState(1);
   const [previewTimestamp, setPreviewTimestamp] = useState<string>('');
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [rawTextCache, setRawTextCache] = useState<string | null>(null);
-  const [previewRawMode, setPreviewRawMode] = useState(false);
 
   const handleClosePreview = useCallback(() => {
     if (previewBlobUrl) {
@@ -117,9 +117,8 @@ export const DocumentDetailPage: React.FC = () => {
     }
     setIsPreviewOpen(false);
     setPreviewBlobUrl(null);
-    setPreviewText(null);
-    setRawTextCache(null);
-    setPreviewRawMode(false);
+    setPreviewCurrentPage(1);
+    setPreviewTotalPages(1);
   }, [previewBlobUrl]);
 
   // Queries - Actively re-verifies server authorization & session validity every 6s
@@ -173,6 +172,7 @@ export const DocumentDetailPage: React.FC = () => {
 
   const isOwner = doc?.owner_id === user?.id;
   const canEdit = isOwner || doc?.effective_permission === 'edit';
+  const canDownload = isOwner || ['read', 'edit', 'break_glass'].includes(doc?.effective_permission || '');
 
   // Request Link State (Owner only)
   const [newLinkName, setNewLinkName] = useState('');
@@ -264,43 +264,46 @@ export const DocumentDetailPage: React.FC = () => {
     }
   };
 
-  // Handle Secure Preview with Forensic Watermarking
+  // Handle Sandboxed Page Loading
+  const loadPreviewPage = async (targetPage: number) => {
+    if (!doc) return;
+    setIsPreviewLoading(true);
+    try {
+      const blob = await api.fetchDocumentPagePreview(doc.id, targetPage);
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewBlobUrl(objectUrl);
+      setPreviewCurrentPage(targetPage);
+    } catch (err: any) {
+      toast.error(err.message || ("Failed to load preview page " + targetPage));
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  // Handle Secure Preview with Dynamic Pixel Watermarking (Phase 8 Sandboxed Pipeline)
   const handleOpenPreview = async () => {
     if (!doc) return;
     setIsPreviewOpen(true);
     setIsPreviewLoading(true);
-    setPreviewBlobUrl(null);
-    setPreviewText(null);
-    setRawTextCache(null);
-    setPreviewRawMode(false);
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
     setPreviewTimestamp(formatToIST(new Date()));
 
     try {
-      const blob = await api.fetchDocumentBlob(doc.id);
-      const isText = doc.detected_media_type.startsWith('text/') || 
-                     doc.detected_media_type === 'application/json' ||
-                     doc.detected_media_type === 'application/javascript';
-      
-      const textContent = await blob.text();
-      setRawTextCache(textContent);
+      // 1. Fetch preview info (total page count)
+      const info = await api.getDocumentPreviewInfo(doc.id);
+      setPreviewTotalPages(info.total_pages || 1);
 
-      if (isText) {
-        setPreviewText(textContent);
-      } else if (doc.detected_media_type === 'application/pdf') {
-        // Inspect content: if it is a synthetic text payload from automated tests (lacking /Pages catalog),
-        // display the text content directly rather than letting the browser PDF engine report a corrupt PDF.
-        if (textContent.includes('Live Verification Payload') || !textContent.includes('/Pages')) {
-          setPreviewText(textContent);
-        } else {
-          const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-          const objectUrl = URL.createObjectURL(pdfBlob);
-          setPreviewBlobUrl(objectUrl);
-        }
-      } else {
-        const typedBlob = new Blob([blob], { type: doc.detected_media_type });
-        const objectUrl = URL.createObjectURL(typedBlob);
-        setPreviewBlobUrl(objectUrl);
-      }
+      // 2. Fetch page 1 raster image
+      const blob = await api.fetchDocumentPagePreview(doc.id, 1);
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewBlobUrl(objectUrl);
+      setPreviewCurrentPage(1);
       toast.info('Secure watermarked preview generated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to open preview');
@@ -2250,21 +2253,39 @@ export const DocumentDetailPage: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {rawTextCache && previewBlobUrl && (
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setPreviewRawMode(!previewRawMode)}
-                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
-                  >
-                    <FileCode size={13} style={{ marginRight: '4px' }} />
-                    <span>{previewRawMode ? 'Rendered View' : 'Raw Text View'}</span>
+                {previewTotalPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.5rem' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      disabled={previewCurrentPage <= 1 || isPreviewLoading}
+                      onClick={() => loadPreviewPage(previewCurrentPage - 1)}
+                      style={{ padding: '0.25rem 0.5rem' }}
+                      title="Previous Page"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                      {previewCurrentPage} / {previewTotalPages}
+                    </span>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      disabled={previewCurrentPage >= previewTotalPages || isPreviewLoading}
+                      onClick={() => loadPreviewPage(previewCurrentPage + 1)}
+                      style={{ padding: '0.25rem 0.5rem' }}
+                      title="Next Page"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+                {canDownload && (
+                  <button className="btn btn-primary btn-sm" onClick={handleDownload}>
+                    <Download size={13} color="var(--copper)" />
+                    <span>Download</span>
                   </button>
                 )}
-                <button className="btn btn-primary btn-sm" onClick={handleDownload}>
-                  <Download size={13} color="var(--copper)" />
-                  <span>Download</span>
-                </button>
                 <button 
                   onClick={handleClosePreview}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-secondary)' }}
@@ -2274,7 +2295,7 @@ export const DocumentDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Preview Box Container with Watermark */}
+            {/* Preview Box Container with Watermarked Raster Rendering */}
             <div style={{ 
               position: 'relative', 
               flex: 1, 
@@ -2286,75 +2307,34 @@ export const DocumentDetailPage: React.FC = () => {
               border: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '1rem',
             }}>
-              {/* Dynamic Forensic Watermark Layer */}
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transform: 'rotate(-25deg)',
-                opacity: 0.08,
-                fontSize: '1.125rem',
-                fontWeight: 800,
-                color: 'var(--graphite)',
-                textAlign: 'center',
-                lineHeight: 2,
-                userSelect: 'none',
-                zIndex: 10,
-              }}>
-                CONFIDENTIAL &bull; TRUSTVAULT DLP PROTECTED<br />
-                AUTHORIZED ACCESS BY: {user?.email || 'Authenticated User'}<br />
-                FORENSIC TIMESTAMP: {previewTimestamp}
-              </div>
-
-              {/* Content Renderers */}
+              {/* Content Renderers: Client receives ONLY raster images with burned forensic watermarks */}
               {isPreviewLoading ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '350px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                  Loading secure stream and applying forensic watermark...
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                  <Shield size={28} className="animate-pulse" color="var(--copper)" />
+                  <span>Generating sandboxed raster page with burned forensic watermarking...</span>
                 </div>
-              ) : (previewText !== null || previewRawMode) ? (
-                <pre style={{
-                  padding: '1.25rem',
-                  fontSize: '0.8125rem',
-                  fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  color: 'var(--text-primary)',
-                  lineHeight: 1.6,
-                }}>
-                  {previewRawMode ? rawTextCache : previewText}
-                </pre>
               ) : previewBlobUrl ? (
-                doc.detected_media_type === 'application/pdf' ? (
-                  <iframe 
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%' }}>
+                  <img 
                     src={previewBlobUrl} 
-                    title="PDF Secure Preview"
-                    style={{ width: '100%', height: '520px', border: 'none' }}
+                    alt={`Secure Page ${previewCurrentPage} of ${previewTotalPages}`} 
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '60vh', 
+                      objectFit: 'contain', 
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', 
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)'
+                    }}
                   />
-                ) : doc.detected_media_type.startsWith('image/') ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-                    <img 
-                      src={previewBlobUrl} 
-                      alt="Secure Document Preview" 
-                      style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ padding: '3rem', textAlign: 'center' }}>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                      Encrypted file format verified (SHA-256 Checksum intact).
-                    </p>
-                    <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={handleDownload}>
-                      Download Original
-                    </button>
-                  </div>
-                )
+                </div>
               ) : (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Preview unavailable. Use Download File.
+                  Preview unavailable.
                 </div>
               )}
             </div>
@@ -2369,7 +2349,7 @@ export const DocumentDetailPage: React.FC = () => {
               color: 'var(--text-muted)',
               fontFamily: 'var(--font-mono)',
             }}>
-              <span>DLP Checksum: {doc.checksum.substring(0, 24)}...</span>
+              <span>Session: {previewTimestamp} &bull; Checksum: {doc.checksum.substring(0, 16)}...</span>
               <span style={{ fontFamily: 'var(--font-family)' }}>Screen capture violates organization policy</span>
             </div>
           </div>

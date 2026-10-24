@@ -28,8 +28,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
+        # Phase 8: Strict Content-Security-Policy & Clickjacking Defense
+        if "Content-Security-Policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'; object-src 'none';"
+
         # Invariant I2 & Phase 3: Zero-cache guarantees across all API and content routes
-        if request.url.path.startswith("/api/") or "/download" in request.url.path:
+        if request.url.path.startswith("/api/") or "/download" in request.url.path or "/pages/" in request.url.path:
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Pragma"] = "no-cache"
 
@@ -52,7 +56,10 @@ app.add_middleware(
         "Content-Length",
         "Cache-Control",
         "Pragma",
-        "Cross-Origin-Resource-Policy"
+        "Cross-Origin-Resource-Policy",
+        "X-TrustVault-Page",
+        "X-TrustVault-Total-Pages",
+        "X-TrustVault-Watermark"
     ]
 )
 

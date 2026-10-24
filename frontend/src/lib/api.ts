@@ -296,6 +296,44 @@ export const api = {
     return response.blob();
   },
 
+  // Phase 8: Sandboxed Raster Page Preview with Dynamic Forensic Watermarking
+  fetchDocumentPagePreview: async (id: string, pageNum: number = 1): Promise<Blob> => {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE}/documents/${id}/pages/${pageNum}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        clearAuthToken();
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login?expired=true';
+        }
+        throw new ApiError('Session expired. Please sign in again.', 401);
+      }
+      if (response.status === 404 || response.status === 403) {
+        throw new ApiError('Document not found, out of bounds, or preview access denied.', response.status);
+      }
+      let errorMsg = 'Failed to fetch preview image';
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch {
+        /* ignore parse error */
+      }
+      throw new ApiError(errorMsg, response.status);
+    }
+
+    return response.blob();
+  },
+
+  getDocumentPreviewInfo: (id: string) =>
+    request<{ document_id: string; total_pages: number; media_type: string; watermarked_for: string }>(
+      `/documents/${id}/preview-info`
+    ),
+
   updateDocumentMetadata: (id: string, data: { title?: string; description?: string; category?: string; classification?: string }) =>
     request<DocumentItem>(`/documents/${id}`, {
       method: 'PATCH',
