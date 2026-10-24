@@ -19,6 +19,7 @@ from app.policies.authorization import AuthorizationPolicy
 from app.services.authorization import AuthorizationService, Action
 from app.audit.verifier import verify_audit_integrity
 from app.audit.service import log_audit_event
+from app.audit.siem import format_event_cef, format_event_ecs, format_event_syslog
 
 from app.storage.local import sanitize_content_disposition_filename
 
@@ -161,7 +162,7 @@ def verify_audit_log_integrity(
 @router.get("/export")
 def export_audit_log(
     request: Request,
-    export_format: str = Query("csv", alias="format", description="Export format: 'csv' or 'json'"),
+    export_format: str = Query("csv", alias="format", regex="^(csv|json|cef|ecs|syslog)$", description="Export format: csv, json, cef, ecs, syslog"),
     document_id: Optional[str] = Query(None, description="Filter by document ID"),
     action: Optional[str] = Query(None, description="Filter by action name"),
     outcome: Optional[str] = Query(None, description="Filter by outcome"),
@@ -271,6 +272,60 @@ def export_audit_log(
         return StreamingResponse(
             io.BytesIO(json_bytes),
             media_type="application/json",
+            headers=headers
+        )
+
+    # SIEM CEF Format (ArcSight Common Event Format)
+    if export_format.lower() == "cef":
+        cef_lines = [format_event_cef(e) for e in events]
+        cef_bytes = ("\n".join(cef_lines) + ("\n" if cef_lines else "")).encode("utf-8")
+        safe_filename = sanitize_content_disposition_filename(f"trustvault_audit_{now_str}.cef")
+        headers = {
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin"
+        }
+        return StreamingResponse(
+            io.BytesIO(cef_bytes),
+            media_type="text/plain",
+            headers=headers
+        )
+
+    # SIEM ECS Format (Elastic Common Schema NDJSON)
+    if export_format.lower() == "ecs":
+        ecs_lines = [json.dumps(format_event_ecs(e)) for e in events]
+        ecs_bytes = ("\n".join(ecs_lines) + ("\n" if ecs_lines else "")).encode("utf-8")
+        safe_filename = sanitize_content_disposition_filename(f"trustvault_audit_{now_str}.ecs.ndjson")
+        headers = {
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin"
+        }
+        return StreamingResponse(
+            io.BytesIO(ecs_bytes),
+            media_type="application/x-ndjson",
+            headers=headers
+        )
+
+    # RFC 5424 Syslog Format
+    if export_format.lower() == "syslog":
+        syslog_lines = [format_event_syslog(e) for e in events]
+        syslog_bytes = ("\n".join(syslog_lines) + ("\n" if syslog_lines else "")).encode("utf-8")
+        safe_filename = sanitize_content_disposition_filename(f"trustvault_audit_{now_str}.syslog")
+        headers = {
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store, private",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin"
+        }
+        return StreamingResponse(
+            io.BytesIO(syslog_bytes),
+            media_type="text/plain",
             headers=headers
         )
 

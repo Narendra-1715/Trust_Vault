@@ -1,11 +1,24 @@
 import json
+import uuid
+import time
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
+from app.core.rate_limit import get_client_ip
+from app.core.logging import (
+    setup_structured_logging,
+    request_id_ctx,
+    correlation_id_ctx,
+    client_ip_ctx
+)
 from app.services.authorization import DocumentNotFoundException, not_found_response
 from app.api.v1 import auth, users, admin, documents, permissions, audit, ai, health, notifications, access_requests, alerts, backups, security_policies, access_reviews, policy_simulator
+
+# Phase 11: Initialize Structured Logging
+if settings.STRUCTURED_LOGGING_ENABLED:
+    setup_structured_logging(settings.LOG_LEVEL)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -161,9 +174,35 @@ app.add_middleware(
         "X-TrustVault-Page",
         "X-TrustVault-Total-Pages",
         "X-TrustVault-Watermark",
-        "Retry-After"
+        "Retry-After",
+        "X-Request-ID",
+        "X-Correlation-ID"
     ]
 )
+
+# Phase 11: Request Tracing and Context Correlation Middleware
+class CorrelationLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        req_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        correlation_id = request.headers.get("x-correlation-id") or req_id
+        client_ip = get_client_ip(request)
+
+        # Set asynchronous context variables for structured logger
+        req_token = request_id_ctx.set(req_id)
+        corr_token = correlation_id_ctx.set(correlation_id)
+        ip_token = client_ip_ctx.set(client_ip)
+
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-ID"] = req_id
+            response.headers["X-Correlation-ID"] = correlation_id
+            return response
+        finally:
+            request_id_ctx.reset(req_token)
+            correlation_id_ctx.reset(corr_token)
+            client_ip_ctx.reset(ip_token)
+
+app.add_middleware(CorrelationLoggingMiddleware)
 
 # Outermost: SecurityHeadersMiddleware (runs on final response after all inner handlers)
 app.add_middleware(SecurityHeadersMiddleware)

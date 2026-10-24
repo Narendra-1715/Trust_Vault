@@ -84,6 +84,16 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = True
     COOKIE_SAMESITE: str = "Strict"
 
+    # Security Observability, SIEM & Webhooks (Phase 11)
+    STRUCTURED_LOGGING_ENABLED: bool = True
+    LOG_LEVEL: str = "INFO"
+    SECURITY_WEBHOOK_ENABLED: bool = False
+    SECURITY_WEBHOOK_URL: Optional[str] = None
+    SECURITY_WEBHOOK_SECRET: Optional[str] = None  # HMAC-SHA256 signing secret
+    SECURITY_WEBHOOK_MAX_PER_MINUTE: int = 10
+    SIEM_SYSLOG_HOST: Optional[str] = None
+    SIEM_SYSLOG_PORT: Optional[int] = 514
+
     # Backup & Disaster Recovery
     BACKUP_DIR: str = "./data/backups"
     BACKUP_ENCRYPTION_KEY: Optional[str] = None

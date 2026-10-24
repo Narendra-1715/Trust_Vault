@@ -22,6 +22,25 @@ def parse_filter_datetime(dt_val: Optional[Union[datetime, str]]) -> Optional[da
     except Exception:
         return None
 
+def _trigger_tamper_alert(db: Session, event_id: str, error_reason: str, idx: int):
+    """Triggers an active CRITICAL SecurityAlert when audit ledger tampering or chain break is detected."""
+    try:
+        from app.services.detection import create_or_suppress_alert
+        create_or_suppress_alert(
+            db=db,
+            event_type="audit_ledger_tampered",
+            severity="critical",
+            summary=f"Cryptographic audit ledger tampering detected at event {event_id}",
+            investigation_metadata={
+                "tampered_event_id": event_id,
+                "event_index": idx,
+                "error_reason": error_reason
+            }
+        )
+    except Exception:
+        pass
+
+
 def verify_audit_integrity(
     db: Session,
     from_date: Optional[Union[datetime, str]] = None,
@@ -73,29 +92,33 @@ def verify_audit_integrity(
     for idx, event in enumerate(events):
         # 1. Monotonic sequence gap verification
         if event.sequence_number != expected_sequence:
+            reason = (
+                f"Chain break / Sequence gap or record deletion detected at event {event.id}: "
+                f"expected sequence {expected_sequence}, found sequence {event.sequence_number}"
+            )
+            _trigger_tamper_alert(db, event.id, reason, idx)
             return {
                 "is_valid": False,
                 "total_events": total_events,
                 "tampered_event_id": event.id,
                 "event_index": idx,
-                "error_reason": (
-                    f"Chain break / Sequence gap or record deletion detected at event {event.id}: "
-                    f"expected sequence {expected_sequence}, found sequence {event.sequence_number}"
-                ),
+                "error_reason": reason,
                 "verified_at_event_id": events[idx - 1].id if idx > 0 else None
             }
 
         # 2. Previous record hash chaining verification
         if event.previous_event_hash != expected_previous_hash:
+            reason = (
+                f"Cryptographic chain break at event {event.id}: previous_event_hash mismatch. "
+                f"Expected {expected_previous_hash}, found {event.previous_event_hash}"
+            )
+            _trigger_tamper_alert(db, event.id, reason, idx)
             return {
                 "is_valid": False,
                 "total_events": total_events,
                 "tampered_event_id": event.id,
                 "event_index": idx,
-                "error_reason": (
-                    f"Cryptographic chain break at event {event.id}: previous_event_hash mismatch. "
-                    f"Expected {expected_previous_hash}, found {event.previous_event_hash}"
-                ),
+                "error_reason": reason,
                 "verified_at_event_id": events[idx - 1].id if idx > 0 else None
             }
 
@@ -140,15 +163,17 @@ def verify_audit_integrity(
                 is_match = True
 
         if not is_match:
+            reason = (
+                f"Tampered content or invalid HMAC at event {event.id}: event_hash mismatch. "
+                f"Computed {recomputed_hmac}, stored {event.event_hash}"
+            )
+            _trigger_tamper_alert(db, event.id, reason, idx)
             return {
                 "is_valid": False,
                 "total_events": total_events,
                 "tampered_event_id": event.id,
                 "event_index": idx,
-                "error_reason": (
-                    f"Tampered content or invalid HMAC at event {event.id}: event_hash mismatch. "
-                    f"Computed {recomputed_hmac}, stored {event.event_hash}"
-                ),
+                "error_reason": reason,
                 "verified_at_event_id": events[idx - 1].id if idx > 0 else None
             }
 

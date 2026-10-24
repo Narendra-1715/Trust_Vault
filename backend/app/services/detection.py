@@ -166,6 +166,15 @@ def create_or_suppress_alert(
     except Exception as e:
         logger.error(f"Failed to log audit event for alert creation: {e}")
 
+    # Dispatch outbound security webhook if configured (Phase 11)
+    try:
+        from app.core.config import settings
+        from app.services.webhook import dispatch_security_webhook
+        if settings.SECURITY_WEBHOOK_ENABLED and settings.SECURITY_WEBHOOK_URL:
+            dispatch_security_webhook(alert)
+    except Exception as e:
+        logger.warning(f"Outbound security webhook delivery error: {e}")
+
     return alert
 
 def detect_failed_logins(
