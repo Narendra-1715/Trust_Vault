@@ -27,7 +27,7 @@ export const SecurityAlertsPage: React.FC = () => {
 
   // Filters & Pagination State
   const [severityFilter, setSeverityFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('active');
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [page, setPage] = useState<number>(0);
@@ -240,7 +240,18 @@ export const SecurityAlertsPage: React.FC = () => {
         gap: '1rem',
         marginBottom: '1.75rem',
       }}>
-        <div className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid var(--graphite)' }}>
+        <div 
+          className="panel" 
+          onClick={() => { setStatusFilter('all'); setSeverityFilter('all'); setPage(0); }}
+          style={{ 
+            padding: '1.25rem', 
+            borderLeft: '4px solid var(--graphite)',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+            backgroundColor: statusFilter === 'all' && severityFilter === 'all' ? 'var(--bg-subtle)' : undefined
+          }}
+          title="Click to view all incidents"
+        >
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
             Total Incidents
           </div>
@@ -252,7 +263,18 @@ export const SecurityAlertsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid #B91C1C' }}>
+        <div 
+          className="panel" 
+          onClick={() => { setStatusFilter('open'); setPage(0); }}
+          style={{ 
+            padding: '1.25rem', 
+            borderLeft: '4px solid #B91C1C',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+            backgroundColor: statusFilter === 'open' ? 'rgba(185, 28, 28, 0.06)' : undefined
+          }}
+          title="Click to filter by open alerts"
+        >
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#B91C1C', textTransform: 'uppercase' }}>
             Open Alerts
           </div>
@@ -264,7 +286,18 @@ export const SecurityAlertsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid #C05621' }}>
+        <div 
+          className="panel" 
+          onClick={() => { setSeverityFilter('high'); setStatusFilter('active'); setPage(0); }}
+          style={{ 
+            padding: '1.25rem', 
+            borderLeft: '4px solid #C05621',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+            backgroundColor: severityFilter === 'high' ? 'rgba(192, 86, 33, 0.06)' : undefined
+          }}
+          title="Click to filter by critical / high alerts"
+        >
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--copper-dark)', textTransform: 'uppercase' }}>
             Critical / High
           </div>
@@ -276,7 +309,18 @@ export const SecurityAlertsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid #3182CE' }}>
+        <div 
+          className="panel" 
+          onClick={() => { setStatusFilter('investigating'); setPage(0); }}
+          style={{ 
+            padding: '1.25rem', 
+            borderLeft: '4px solid #3182CE',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+            backgroundColor: statusFilter === 'investigating' ? 'rgba(49, 130, 206, 0.06)' : undefined
+          }}
+          title="Click to filter by investigating alerts"
+        >
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2B6CB0', textTransform: 'uppercase' }}>
             Investigating
           </div>
@@ -288,7 +332,18 @@ export const SecurityAlertsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="panel" style={{ padding: '1.25rem', borderLeft: '4px solid #2F855A' }}>
+        <div 
+          className="panel" 
+          onClick={() => { setStatusFilter('resolved'); setPage(0); }}
+          style={{ 
+            padding: '1.25rem', 
+            borderLeft: '4px solid #2F855A',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+            backgroundColor: statusFilter === 'resolved' ? 'rgba(47, 133, 90, 0.06)' : undefined
+          }}
+          title="Click to view resolved & archived alerts"
+        >
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#276749', textTransform: 'uppercase' }}>
             Resolved
           </div>
@@ -350,10 +405,11 @@ export const SecurityAlertsPage: React.FC = () => {
                 className="input"
                 style={{ padding: '0.375rem 0.625rem', fontSize: '0.8125rem', width: 'auto' }}
               >
+                <option value="active">Active (Unresolved)</option>
+                <option value="open">Open Only</option>
+                <option value="investigating">Investigating Only</option>
+                <option value="resolved">Resolved (Archived)</option>
                 <option value="all">All Statuses</option>
-                <option value="open">Open</option>
-                <option value="investigating">Investigating</option>
-                <option value="resolved">Resolved</option>
               </select>
             </div>
 

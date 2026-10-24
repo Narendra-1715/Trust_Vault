@@ -79,7 +79,10 @@ def list_security_alerts(
     if severity:
         query = query.filter(SecurityAlert.severity == severity.lower())
     if status:
-        query = query.filter(SecurityAlert.status == status.lower())
+        if status.lower() in ("active", "unresolved"):
+            query = query.filter(SecurityAlert.status.in_(["open", "investigating"]))
+        else:
+            query = query.filter(SecurityAlert.status == status.lower())
     if event_type:
         query = query.filter(SecurityAlert.event_type == event_type)
 
