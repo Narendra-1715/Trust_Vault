@@ -11,6 +11,7 @@ from sqlalchemy import or_
 from app.db.session import get_db
 from app.models.user import User
 from app.models.document import Document
+from app.models.permission import DocumentPermission
 from app.models.audit import AuditEvent
 from app.schemas.audit import AuditEventResponse, AuditListResponse, AuditVerificationResponse
 from app.api.deps import get_current_user, get_current_admin, get_request_id
@@ -68,18 +69,27 @@ def list_audit_events(
     filters = []
 
     if document_id:
-        doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-        AuthorizationPolicy.require_read(db, current_user, doc)
+        # Administrators can view full audit history of any document from creation till deletion
+        if current_user.role != "admin":
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            if doc.owner_id != current_user.id:
+                has_perm = db.query(DocumentPermission).filter(
+                    DocumentPermission.document_id == document_id,
+                    DocumentPermission.user_id == current_user.id
+                ).first()
+                if not has_perm:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to inspect audit history for this document")
         filters.append(AuditEvent.resource_id == document_id)
     else:
         # Access scope:
         # - Administrators can inspect all organizational audit events.
-        # - Document owners see events where they are the actor OR events on documents they own (e.g. download denials).
+        # - Document owners see events where they are the actor OR events on documents they own (including deleted documents).
         # - Viewers see audit events where they are the actor.
         if current_user.role != "admin":
             owned_doc_ids = db.query(Document.id).filter(
-                Document.owner_id == current_user.id,
-                Document.deleted_at.is_(None)
+                Document.owner_id == current_user.id
             ).scalar_subquery()
 
             filters.append(
@@ -167,14 +177,22 @@ def export_audit_log(
     filters = []
 
     if document_id:
-        doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-        AuthorizationPolicy.require_read(db, current_user, doc)
+        if current_user.role != "admin":
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            if doc.owner_id != current_user.id:
+                has_perm = db.query(DocumentPermission).filter(
+                    DocumentPermission.document_id == document_id,
+                    DocumentPermission.user_id == current_user.id
+                ).first()
+                if not has_perm:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to export audit history for this document")
         filters.append(AuditEvent.resource_id == document_id)
     else:
         if current_user.role != "admin":
             owned_doc_ids = db.query(Document.id).filter(
-                Document.owner_id == current_user.id,
-                Document.deleted_at.is_(None)
+                Document.owner_id == current_user.id
             ).scalar_subquery()
 
             filters.append(
