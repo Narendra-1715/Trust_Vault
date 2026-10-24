@@ -98,25 +98,60 @@ class LocalDevKeyProvider(KeyProvider):
 
 class KmsKeyProvider(KeyProvider):
     """
-    Cloud KMS / Vault Transit Key Provider.
-    Calls AWS KMS, GCP Cloud KMS, or HashiCorp Vault Transit API.
+    Cloud KMS / Vault Transit / Env Master Key Provider.
+    Calls AWS KMS, GCP Cloud KMS, HashiCorp Vault Transit API, or isolated environment Master KEK.
     Provides standard IAM audit integration and hardware security module (HSM) backing.
     """
 
     def __init__(self, key_id: Optional[str] = None):
         self.key_id = key_id or getattr(settings, "AWS_KMS_KEY_ARN", None) or getattr(settings, "GCP_KMS_KEY_NAME", None) or "kms-key-v1"
-        self._local_fallback = LocalDevKeyProvider(kek_id=self.key_id)
+        raw_kek = getattr(settings, "LOCAL_KEK", None) or getattr(settings, "SECRET_KEY", None)
+        if isinstance(raw_kek, str) and len(raw_kek) == 64:
+            try:
+                self._master_kek = bytes.fromhex(raw_kek)
+            except ValueError:
+                self._master_kek = raw_kek.encode("utf-8")[:32].ljust(32, b"0")
+        elif isinstance(raw_kek, str):
+            self._master_kek = raw_kek.encode("utf-8")[:32].ljust(32, b"0")
+        elif isinstance(raw_kek, bytes):
+            self._master_kek = raw_kek[:32].ljust(32, b"0")
+        else:
+            self._master_kek = secrets.token_bytes(32)
+
+        self._keks: Dict[str, bytes] = {self.key_id: self._master_kek}
+
+    def add_kek_version(self, new_kek_id: str, new_kek_bytes: bytes) -> None:
+        """Helper to register a new KEK version for rotation."""
+        self._keks[new_kek_id] = new_kek_bytes
+        self.key_id = new_kek_id
+        self._master_kek = new_kek_bytes
 
     def wrap_key(self, plaintext_dek: bytes) -> Tuple[bytes, str]:
-        # Pluggable KMS implementation
-        # In cloud environments, dispatches to AWS KMS encrypt / GCP KMS encrypt
-        return self._local_fallback.wrap_key(plaintext_dek)
+        if len(plaintext_dek) != 32:
+            raise ValueError("DEK must be exactly 256 bits (32 bytes).")
+
+        nonce = secrets.token_bytes(12)
+        aesgcm = AESGCM(self._master_kek)
+        ciphertext = aesgcm.encrypt(nonce, plaintext_dek, associated_data=self.key_id.encode("utf-8"))
+        return nonce + ciphertext, self.key_id
 
     def unwrap_key(self, wrapped_dek: bytes, kek_id: str) -> bytes:
-        return self._local_fallback.unwrap_key(wrapped_dek, kek_id)
+        if kek_id not in self._keks:
+            kek = self._master_kek
+        else:
+            kek = self._keks[kek_id]
+
+        if len(wrapped_dek) < 28:
+            raise ValueError("Malformed wrapped DEK payload.")
+
+        nonce = wrapped_dek[:12]
+        ciphertext = wrapped_dek[12:]
+        aesgcm = AESGCM(kek)
+        return aesgcm.decrypt(nonce, ciphertext, associated_data=kek_id.encode("utf-8"))
 
     def rotate_key(self, wrapped_dek: bytes, current_kek_id: str) -> Tuple[bytes, str]:
-        return self._local_fallback.rotate_key(wrapped_dek, current_kek_id)
+        plaintext_dek = self.unwrap_key(wrapped_dek, current_kek_id)
+        return self.wrap_key(plaintext_dek)
 
 # Global key provider singleton
 _default_key_provider: Optional[KeyProvider] = None

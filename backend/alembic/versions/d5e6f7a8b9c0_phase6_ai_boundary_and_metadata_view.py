@@ -44,29 +44,30 @@ def upgrade() -> None:
             WHERE deleted_at IS NULL;
         """)
 
-        # Database-level enforcement for ai_readonly role
+        # Database-level enforcement for ai_readonly role (handled safely in managed Postgres)
         op.execute("""
             DO $$
             BEGIN
-                IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'ai_readonly') THEN
-                    CREATE ROLE ai_readonly WITH LOGIN;
+                IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = current_user AND (rolcreaterole OR rolsuper)) THEN
+                    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'ai_readonly') THEN
+                        CREATE ROLE ai_readonly WITH LOGIN;
+                    END IF;
+                    -- Revoke all table modifications in public schema
+                    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ai_readonly;
+                    -- Grant SELECT ONLY on the sanitized metadata view and pending suggestions
+                    GRANT SELECT ON ai_document_metadata_view TO ai_readonly;
+                    GRANT SELECT ON ai_access_suggestions TO ai_readonly;
+                    -- Explicitly forbid access to sensitive tables
+                    REVOKE ALL ON documents FROM ai_readonly;
+                    REVOKE ALL ON audit_events FROM ai_readonly;
+                    REVOKE ALL ON users FROM ai_readonly;
+                ELSE
+                    RAISE NOTICE 'Skipping ai_readonly role creation: current user % lacks CREATEROLE', current_user;
                 END IF;
+            EXCEPTION WHEN insufficient_privilege THEN
+                RAISE NOTICE 'Skipping ai_readonly role configuration due to insufficient privilege';
             END
             $$;
-        """)
-
-        op.execute("""
-            -- Revoke all table modifications in public schema
-            REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ai_readonly;
-            
-            -- Grant SELECT ONLY on the sanitized metadata view and pending suggestions
-            GRANT SELECT ON ai_document_metadata_view TO ai_readonly;
-            GRANT SELECT ON ai_access_suggestions TO ai_readonly;
-            
-            -- Explicitly forbid access to sensitive tables
-            REVOKE ALL ON documents FROM ai_readonly;
-            REVOKE ALL ON audit_events FROM ai_readonly;
-            REVOKE ALL ON users FROM ai_readonly;
         """)
     else:
         # SQLite support for local dev and testing

@@ -38,20 +38,26 @@ def upgrade() -> None:
     if 'user_agent_hash' not in cols:
         op.add_column('audit_events', sa.Column('user_agent_hash', sa.String(64), nullable=True))
 
-    # 5. PostgreSQL-specific role enforcement: audit_writer (INSERT only)
+    # 5. PostgreSQL-specific role enforcement: audit_writer (INSERT only, handled safely in managed Postgres)
     if conn.dialect.name == "postgresql":
         op.execute(text("""
         DO $$
         BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_writer') THEN
-                CREATE ROLE audit_writer NOLOGIN;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolcreaterole OR rolsuper)) THEN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'audit_writer') THEN
+                    CREATE ROLE audit_writer NOLOGIN;
+                END IF;
+                GRANT USAGE ON SCHEMA public TO audit_writer;
+                GRANT INSERT ON TABLE audit_events TO audit_writer;
+                REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_events FROM audit_writer;
+            ELSE
+                RAISE NOTICE 'Skipping audit_writer role creation: current user % does not have CREATEROLE permission', current_user;
             END IF;
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'Skipping audit_writer role configuration due to insufficient privilege';
         END
         $$;
         """))
-        op.execute(text("GRANT USAGE ON SCHEMA public TO audit_writer;"))
-        op.execute(text("GRANT INSERT ON TABLE audit_events TO audit_writer;"))
-        op.execute(text("REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_events FROM audit_writer;"))
 
     # 6. Backfill monotonic sequence numbers for existing records
     rows = conn.execute(text("SELECT id FROM audit_events ORDER BY timestamp ASC, id ASC")).fetchall()

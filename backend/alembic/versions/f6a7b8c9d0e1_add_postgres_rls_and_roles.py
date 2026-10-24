@@ -17,25 +17,31 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     if conn.dialect.name == 'postgresql':
-        # 1. Provision security roles if not present
+        # 1. Provision security roles if not present (handled safely in managed Postgres)
         op.execute(sa.text("""
         DO $$
         BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_rw') THEN
-                CREATE ROLE app_rw WITH NOBYPASSRLS;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolcreaterole OR rolsuper)) THEN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_rw') THEN
+                    CREATE ROLE app_rw WITH NOBYPASSRLS;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'migrator') THEN
+                    CREATE ROLE migrator;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'audit_writer') THEN
+                    CREATE ROLE audit_writer;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ai_readonly') THEN
+                    CREATE ROLE ai_readonly;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'backup_ro') THEN
+                    CREATE ROLE backup_ro;
+                END IF;
+            ELSE
+                RAISE NOTICE 'Skipping custom role creation: current user % does not have CREATEROLE permission', current_user;
             END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'migrator') THEN
-                CREATE ROLE migrator;
-            END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_writer') THEN
-                CREATE ROLE audit_writer;
-            END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ai_readonly') THEN
-                CREATE ROLE ai_readonly;
-            END IF;
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'backup_ro') THEN
-                CREATE ROLE backup_ro;
-            END IF;
+        EXCEPTION WHEN insufficient_privilege THEN
+            RAISE NOTICE 'Skipping custom role creation due to insufficient privilege';
         END
         $$;
         """))

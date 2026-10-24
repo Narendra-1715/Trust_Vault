@@ -23,7 +23,7 @@ def upgrade() -> None:
     if 'is_frozen' not in doc_cols:
         with op.batch_alter_table('documents') as batch_op:
             batch_op.add_column(
-                sa.Column('is_frozen', sa.Boolean(), server_default='0', nullable=False)
+                sa.Column('is_frozen', sa.Boolean(), server_default=sa.text('false'), nullable=False)
             )
 
     # 2. Add columns to emergency_accesses table

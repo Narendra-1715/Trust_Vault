@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     AUDIT_CHECKPOINT_DIR: str = "./data/audit_checkpoints"
 
     # Key Management & Envelope Encryption (Phase 2)
-    KMS_PROVIDER: str = "local"  # "local", "aws_kms", "gcp_kms", "vault"
+    KMS_PROVIDER: str = "local"  # "local", "aws_kms", "gcp_kms", "vault", "env"
     LOCAL_KEK: Optional[str] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # 256-bit hex KEK
     AWS_KMS_KEY_ARN: Optional[str] = None
     GCP_KMS_KEY_NAME: Optional[str] = None
@@ -38,10 +38,13 @@ class Settings(BaseSettings):
     @field_validator("KMS_PROVIDER")
     @classmethod
     def validate_kms_provider(cls, v: str, info) -> str:
-        # Fail closed in production if local key provider is selected
+        # Fail closed in production if local key provider is selected without non-default KEK
         env = info.data.get("ENVIRONMENT", "development") if hasattr(info, "data") else "development"
-        if env and str(env).lower() == "production" and str(v).lower() == "local":
-            raise ValueError("LocalDevKeyProvider is strictly prohibited when ENVIRONMENT=production. A production KMS provider must be configured.")
+        local_kek = info.data.get("LOCAL_KEK") if hasattr(info, "data") else None
+        dev_default = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        if env and str(env).lower() == "production":
+            if str(v).lower() == "local" and (not local_kek or local_kek == dev_default):
+                raise ValueError("LocalDevKeyProvider with default static dev KEK is strictly prohibited when ENVIRONMENT=production. A production KMS provider or distinct LOCAL_KEK must be configured.")
         return v
     
     # Database
