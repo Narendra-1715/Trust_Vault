@@ -231,6 +231,14 @@ def detect_repeated_denials(
 
     if denial_count >= DetectionConfig.REPEATED_DENIALS_THRESHOLD:
         doc_str = f" for '{document_title}'" if document_title else ""
+        valid_doc_id = None
+        if document_id:
+            try:
+                from app.models.document import Document
+                if db.query(Document.id).filter(Document.id == document_id).first():
+                    valid_doc_id = document_id
+            except Exception:
+                pass
         return create_or_suppress_alert(
             db=db,
             event_type="repeated_denials",
@@ -245,7 +253,7 @@ def detect_repeated_denials(
                 "threshold": DetectionConfig.REPEATED_DENIALS_THRESHOLD
             },
             actor_id=actor_id,
-            target_document_id=document_id,
+            target_document_id=valid_doc_id,
             request_id=request_id
         )
     return None
@@ -391,6 +399,14 @@ def detect_cross_owner_probes(
     ).count()
 
     if cross_probes >= DetectionConfig.CROSS_OWNER_PROBE_THRESHOLD:
+        valid_doc_id = None
+        if target_document_id:
+            try:
+                from app.models.document import Document
+                if db.query(Document.id).filter(Document.id == target_document_id).first():
+                    valid_doc_id = target_document_id
+            except Exception:
+                pass
         return create_or_suppress_alert(
             db=db,
             event_type="cross_owner_probe",
@@ -404,7 +420,7 @@ def detect_cross_owner_probes(
                 "threshold": DetectionConfig.CROSS_OWNER_PROBE_THRESHOLD
             },
             actor_id=actor_id,
-            target_document_id=target_document_id,
+            target_document_id=valid_doc_id,
             request_id=request_id
         )
     return None

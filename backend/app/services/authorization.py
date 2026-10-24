@@ -8,16 +8,19 @@ Enforces:
 """
 
 import uuid
+import time
+import secrets
 from datetime import datetime, timezone
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
+from app.core.config import settings
 from app.models.user import User
 from app.models.document import Document
 from app.models.permission import DocumentPermission
@@ -25,6 +28,14 @@ from app.audit.service import log_audit_event
 from app.notifications.service import check_and_notify_repeated_denials
 
 NOT_FOUND_DETAIL = "Document not found"
+UNIFORM_404_BODY = b'{"detail":"Document not found"}'
+UNIFORM_404_HEADERS = {
+    "Content-Type": "application/json",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store, private",
+    "Pragma": "no-cache",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
 
 class Action(str, Enum):
     VIEW = "VIEW"                       # Preview content or stream
@@ -51,20 +62,60 @@ class DocumentNotFoundException(HTTPException):
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=NOT_FOUND_DETAIL,
-            headers={"X-Content-Type-Options": "nosniff"}
+            headers=UNIFORM_404_HEADERS
         )
 
-def raise_not_found() -> None:
-    """Raises the uniform 404 exception guaranteeing zero existence leakage."""
-    raise DocumentNotFoundException()
-
-def not_found_response() -> JSONResponse:
-    """Returns the byte-identical 404 JSONResponse with nosniff headers."""
-    return JSONResponse(
+def not_found_response() -> Response:
+    """Returns the byte-identical 404 Response with nosniff and zero-cache headers."""
+    return Response(
+        content=UNIFORM_404_BODY,
         status_code=status.HTTP_404_NOT_FOUND,
-        content={"detail": NOT_FOUND_DETAIL},
-        headers={"X-Content-Type-Options": "nosniff"}
+        media_type="application/json",
+        headers=UNIFORM_404_HEADERS
     )
+
+def execute_dummy_queries(db: Session, principal_id: Optional[str] = None) -> None:
+    """
+    Executes dummy queries on DocumentPermission and User to equalize DB workload
+    between nonexistent resources and existing-but-unauthorized resources.
+    """
+    try:
+        dummy_id = "00000000-0000-0000-0000-000000000000"
+        db.query(DocumentPermission).filter(
+            DocumentPermission.document_id == dummy_id,
+            DocumentPermission.user_id == (principal_id or dummy_id)
+        ).first()
+        db.query(User).filter(User.id == dummy_id).first()
+    except Exception:
+        pass
+
+def equalize_timing(start_time: float) -> None:
+    """
+    Pads elapsed execution time to a constant-time floor plus cryptographic jitter
+    to eliminate timing side-channel existence leaks on document routes.
+    """
+    if not getattr(settings, "TIMING_EQUALIZATION_ENABLED", True):
+        return
+    floor_ms = getattr(settings, "TIMING_LATENCY_FLOOR_MS", 30)
+    jitter_max_ms = getattr(settings, "TIMING_JITTER_MAX_MS", 15)
+    jitter_ms = secrets.randbelow(max(1, jitter_max_ms))
+    target_seconds = (floor_ms + jitter_ms) / 1000.0
+    elapsed = time.perf_counter() - start_time
+    remaining = target_seconds - elapsed
+    if remaining > 0:
+        time.sleep(remaining)
+
+def raise_not_found(
+    db: Optional[Session] = None,
+    principal_id: Optional[str] = None,
+    start_time: Optional[float] = None
+) -> None:
+    """Raises the uniform 404 exception guaranteeing zero existence leakage and equalized timing."""
+    if db is not None:
+        execute_dummy_queries(db, principal_id)
+    if start_time is not None:
+        equalize_timing(start_time)
+    raise DocumentNotFoundException()
 
 def is_valid_uuid(val: Any) -> bool:
     if not val:
@@ -101,6 +152,7 @@ class AuthorizationService:
 
         # 1. UUID validation (prevents 422 enumeration leaks on path parameters)
         if not is_valid_uuid(resource_id):
+            execute_dummy_queries(db, principal_id)
             return Decision(
                 allowed=False,
                 reason="invalid_resource_id_format",
@@ -112,6 +164,7 @@ class AuthorizationService:
 
         # 2. Principal authentication and active status check
         if not principal or not getattr(principal, "is_active", False):
+            execute_dummy_queries(db, principal_id)
             return Decision(
                 allowed=False,
                 reason="unauthenticated_or_inactive_principal",
@@ -133,6 +186,7 @@ class AuthorizationService:
         # 3. Retrieve live document state
         doc = db.query(Document).filter(Document.id == resource_id).first()
         if not doc:
+            execute_dummy_queries(db, principal_id)
             return Decision(
                 allowed=False,
                 reason="document_not_found",
@@ -406,8 +460,10 @@ class AuthorizationService:
     ) -> Document:
         """
         Policy Enforcement Point (PEP):
-        Calls decide(). If denied, logs security audit event and raises uniform 404.
+        Calls decide(). If denied, logs security audit event, equalizes timing,
+        and raises uniform 404.
         """
+        t0 = time.perf_counter()
         decision = cls.decide(db, principal, action, resource_id, context)
         if not decision.allowed:
             # Audit log unauthorized access attempts
@@ -434,6 +490,7 @@ class AuthorizationService:
                     )
             except Exception:
                 pass
+            equalize_timing(t0)
             raise_not_found()
 
         return decision.document

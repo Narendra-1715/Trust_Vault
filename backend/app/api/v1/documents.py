@@ -697,15 +697,25 @@ def download_document_version(
     Validates server-side permissions and storage checksum before streaming.
     """
     request_id = get_request_id(request)
+    # Enforce authorization on document FIRST before probing versions
+    doc = AuthorizationService.enforce(
+        db,
+        current_user,
+        Action.DOWNLOAD,
+        document_id,
+        request_id=request_id
+    )
+
     version = db.query(DocumentVersion).filter(
         DocumentVersion.id == version_id,
         DocumentVersion.document_id == document_id
     ).first()
 
     if not version:
-        raise_not_found()
+        raise_not_found(db, current_user.id)
 
-    doc = AuthorizationService.enforce(
+    # Re-verify version range scoping if grant is version-scoped
+    AuthorizationService.enforce(
         db,
         current_user,
         Action.DOWNLOAD,
@@ -776,7 +786,7 @@ def restore_document_version(
     ).first()
 
     if not version_to_restore:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document version not found")
+        raise_not_found(db, current_user.id)
 
     if not storage_service.exists(version_to_restore.storage_key):
         raise HTTPException(

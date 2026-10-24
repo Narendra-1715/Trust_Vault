@@ -12,7 +12,7 @@ from app.main import app
 from app.core.config import settings
 from app.db.session import Base, get_db
 from app.core.security import hash_password
-from app.core.rate_limit import login_limiter, upload_limiter, ai_limiter
+from app.core.rate_limit import login_limiter, upload_limiter, ai_limiter, access_request_limiter
 from app.models.user import User
 from app.storage.local import LocalPrivateStorage, storage_service
 
@@ -29,6 +29,7 @@ def reset_rate_limiters():
     login_limiter.reset()
     upload_limiter.reset()
     ai_limiter.reset()
+    access_request_limiter.reset()
 
 @pytest.fixture(scope="session")
 def test_temp_dir():

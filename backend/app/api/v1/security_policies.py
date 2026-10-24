@@ -11,6 +11,7 @@ from app.schemas.security_policy import SecurityPolicyResponse, SecurityPolicyUp
 from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user, get_request_id
 from app.audit.service import log_audit_event
+from app.services.authorization import AuthorizationService, Action
 from app.services.classification_policy import (
     get_security_policy,
     can_user_change_classification,
@@ -110,7 +111,14 @@ def update_document_classification(
     request_id = get_request_id(request)
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        from app.services.authorization import raise_not_found
+        raise_not_found(db=db, principal_id=current_user.id)
+
+    # Check if caller has view access to this document; unauthorized callers receive uniform 404
+    decision = AuthorizationService.decide(db, current_user, Action.VIEW_METADATA, document_id)
+    if not decision.allowed:
+        from app.services.authorization import raise_not_found
+        raise_not_found(db=db, principal_id=current_user.id)
 
     target_classification = update_data.classification.strip()
     if target_classification not in VALID_CLASSIFICATIONS:

@@ -16,6 +16,7 @@ from app.models.audit import AuditEvent
 from app.schemas.audit import AuditEventResponse, AuditListResponse, AuditVerificationResponse
 from app.api.deps import get_current_user, get_current_admin, get_request_id
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action
 from app.audit.verifier import verify_audit_integrity
 from app.audit.service import log_audit_event
 
@@ -71,18 +72,9 @@ def list_audit_events(
     filters = []
 
     if document_id:
-        # Administrators can view full audit history of any document from creation till deletion
+        # Enforce server-side authorization: unauthorized callers receive uniform 404
         if current_user.role != "admin":
-            doc = db.query(Document).filter(Document.id == document_id).first()
-            if not doc:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-            if doc.owner_id != current_user.id:
-                has_perm = db.query(DocumentPermission).filter(
-                    DocumentPermission.document_id == document_id,
-                    DocumentPermission.user_id == current_user.id
-                ).first()
-                if not has_perm:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to inspect audit history for this document")
+            AuthorizationService.enforce(db, current_user, Action.VIEW_METADATA, document_id)
         filters.append(AuditEvent.resource_id == document_id)
     else:
         # Access scope:
@@ -184,16 +176,7 @@ def export_audit_log(
 
     if document_id:
         if current_user.role != "admin":
-            doc = db.query(Document).filter(Document.id == document_id).first()
-            if not doc:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-            if doc.owner_id != current_user.id:
-                has_perm = db.query(DocumentPermission).filter(
-                    DocumentPermission.document_id == document_id,
-                    DocumentPermission.user_id == current_user.id
-                ).first()
-                if not has_perm:
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to export audit history for this document")
+            AuthorizationService.enforce(db, current_user, Action.VIEW_METADATA, document_id)
         filters.append(AuditEvent.resource_id == document_id)
     else:
         if current_user.role != "admin":

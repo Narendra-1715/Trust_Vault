@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
+from app.services.authorization import DocumentNotFoundException, not_found_response
 from app.api.v1 import auth, users, admin, documents, permissions, audit, ai, health, notifications, access_requests, alerts, backups, security_policies, access_reviews, policy_simulator
 
 app = FastAPI(
@@ -11,6 +12,11 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Invariant I3: Uniform 404 Exception Handler (Byte-identical body & headers, zero existence leaks)
+@app.exception_handler(DocumentNotFoundException)
+async def document_not_found_handler(request: Request, exc: DocumentNotFoundException):
+    return not_found_response()
 
 # Strict Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

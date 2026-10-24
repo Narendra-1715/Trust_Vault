@@ -1,6 +1,7 @@
 import secrets
 import hashlib
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
@@ -26,8 +27,15 @@ from app.schemas.request_link import (
     RequestLinkSubmit
 )
 from app.api.deps import get_current_user, get_request_id
+from app.core.rate_limit import access_request_limiter, check_rate_limit
 from app.policies.authorization import AuthorizationPolicy
-from app.services.authorization import AuthorizationService, Action, raise_not_found
+from app.services.authorization import (
+    AuthorizationService,
+    Action,
+    raise_not_found,
+    execute_dummy_queries,
+    equalize_timing
+)
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
 from app.services.detection import detect_invalid_reference_probes, detect_cross_owner_probes
@@ -111,20 +119,29 @@ def create_access_request(
     - Duplicate pending requests for the same user and document are rejected (409 Conflict).
     - Derives owner_id and requester_id server-side to prevent IDOR/tampering.
     """
+    check_rate_limit(request, access_request_limiter, key_prefix="access_req", user_id=current_user.id)
     request_id = get_request_id(request)
     now_utc = datetime.now(timezone.utc)
+    t0 = time.perf_counter()
 
-    # Validate target document existence
+    # Validate target document existence with zero-existence leakage & timing equalization
     doc = db.query(Document).filter(
         Document.id == request_in.document_id,
         Document.deleted_at.is_(None)
     ).first()
 
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
+        log_audit_event(
+            db=db,
+            action="access_request.target_not_found",
+            resource_type="document",
+            resource_id=request_in.document_id,
+            outcome="denied",
+            actor_id=current_user.id,
+            request_id=request_id,
+            metadata={"reason": "Access request submitted for nonexistent document"}
         )
+        raise_not_found(db=db, principal_id=current_user.id, start_time=t0)
 
     # Document owner check
     if doc.owner_id == current_user.id:
@@ -650,10 +667,14 @@ def create_document_request_link(
     Generates an unpredictable, revocable request-access reference link for a specific document.
     Strictly enforced:
     - Only the verified document owner can create request links.
+    - 256 bits of cryptographic entropy (unguessable token).
+    - Default expiration: 7 days.
+    - Default single-purpose usage (max_uses=1).
+    - Rate limited per IP and per user.
     - Raw token is never stored in plaintext (only SHA-256 hash is persisted).
-    - Raw token is returned only once to the owner for distribution.
     - The link NEVER confers document content access.
     """
+    check_rate_limit(request, access_request_limiter, key_prefix="access_req", user_id=current_user.id)
     req_id = get_request_id(request)
     doc_probe = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     if doc_probe and doc_probe.owner_id != current_user.id:
@@ -676,7 +697,8 @@ def create_document_request_link(
     doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=req_id)
 
     now_utc = datetime.now(timezone.utc)
-    exp = link_in.expires_at
+    # Default expiry: 7 days if not explicitly specified
+    exp = link_in.expires_at or (now_utc + timedelta(days=7))
     if exp is not None:
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=timezone.utc)
@@ -685,6 +707,8 @@ def create_document_request_link(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Expiration date must be in the future"
             )
+
+    max_uses = link_in.max_uses
 
     # 256 bits of cryptographic entropy (unpredictable token)
     raw_token = secrets.token_urlsafe(32)
@@ -699,7 +723,7 @@ def create_document_request_link(
         token_prefix=token_prefix,
         name=link_in.name.strip() if link_in.name else None,
         expires_at=exp,
-        max_uses=link_in.max_uses,
+        max_uses=max_uses,
         created_at=now_utc
     )
     db.add(new_link)
@@ -806,6 +830,7 @@ def revoke_document_request_link(
 @router.get("/resolve-link/{token}", response_model=RequestLinkResolved)
 def resolve_request_link(
     token: str,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -813,11 +838,14 @@ def resolve_request_link(
     Resolves a request-access reference link for an authenticated user.
     Safe against data leakage:
     - Verifies token validity against stored SHA-256 hash.
+    - Rate limited per IP and per user.
     - Rejects invalid, revoked, or expired tokens.
     - Exposes strictly non-sensitive discovery metadata (title, category, owner name/email).
     - Never exposes document contents, storage paths, checksums, or file bytes.
     - Never grants access to the document.
     """
+    check_rate_limit(request, access_request_limiter, key_prefix="access_req", user_id=current_user.id)
+    t0 = time.perf_counter()
     token_clean = token.strip()
     token_hash = hashlib.sha256(token_clean.encode("utf-8")).hexdigest()
 
@@ -839,6 +867,8 @@ def resolve_request_link(
             actor_id=current_user.id,
             token_prefix=token_clean[:8]
         )
+        if status_code == status.HTTP_404_NOT_FOUND:
+            raise_not_found(db=db, principal_id=current_user.id, start_time=t0)
         raise HTTPException(status_code=status_code, detail=reason)
 
     if not link:
@@ -864,10 +894,7 @@ def resolve_request_link(
     ).first()
 
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Target document is no longer available"
-        )
+        raise_not_found(db=db, principal_id=current_user.id, start_time=t0)
 
     owner = doc.owner
     has_access = AuthorizationPolicy.can_read_document(db, current_user, doc)
@@ -904,6 +931,7 @@ def submit_access_request_via_link(
     Strictly enforced:
     - Never trusts client-supplied document IDs or owner IDs; derives all bindings from the validated link and database state.
     - Requester must be authenticated.
+    - Rate limited per IP and per user.
     - Document owner cannot request access to their own document (400).
     - Users with existing active access cannot submit duplicate requests (400).
     - Prevents duplicate pending requests for the same user and document (409 Conflict).
@@ -911,6 +939,8 @@ def submit_access_request_via_link(
     - Dispatches security alert to document owner.
     - Does NOT grant document access. Access remains denied until owner approval.
     """
+    check_rate_limit(request, access_request_limiter, key_prefix="access_req", user_id=current_user.id)
+    t0 = time.perf_counter()
     token_clean = token.strip()
     token_hash = hashlib.sha256(token_clean.encode("utf-8")).hexdigest()
     http_req_id = get_request_id(request)
@@ -922,10 +952,7 @@ def submit_access_request_via_link(
     ).with_for_update().first()
 
     if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid request access link"
-        )
+        raise_not_found(db=db, principal_id=current_user.id, start_time=t0)
 
     if link.revoked_at is not None:
         raise HTTPException(
@@ -956,10 +983,7 @@ def submit_access_request_via_link(
     ).first()
 
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
+        raise_not_found(db=db, principal_id=current_user.id, start_time=t0)
 
     # Server-side validation: owner cannot request own doc
     if doc.owner_id == current_user.id:

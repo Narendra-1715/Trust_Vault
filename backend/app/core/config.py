@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8 hours
 
+    # Information Leak Hardening & Timing Equalization (Phase 4 / Invariant I3)
+    TIMING_EQUALIZATION_ENABLED: bool = True
+    TIMING_LATENCY_FLOOR_MS: int = 30  # Milliseconds minimum floor for authorization denials
+    TIMING_JITTER_MAX_MS: int = 15     # Milliseconds max cryptographically random jitter
+
     # Key Management & Envelope Encryption (Phase 2)
     KMS_PROVIDER: str = "local"  # "local", "aws_kms", "gcp_kms", "vault"
     LOCAL_KEK: Optional[str] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # 256-bit hex KEK
