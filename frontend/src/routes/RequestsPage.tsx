@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   KeyRound, 
@@ -11,7 +11,8 @@ import {
   Check, 
   X, 
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Link2
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -22,9 +23,37 @@ import type { AccessRequest } from '../types';
 export const RequestsPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'incoming' | 'my'>('incoming');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'cancelled'>('pending');
+
+  // Redeem Link Modal State
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [redeemInput, setRedeemInput] = useState('');
+
+  const handleRedeemSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = redeemInput.trim();
+    if (!raw) return;
+
+    let token = raw;
+    if (raw.includes('/request-access/')) {
+      token = raw.split('/request-access/')[1]?.split('?')[0]?.split('#')[0] || raw;
+    } else if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const parts = raw.split('/');
+      token = parts[parts.length - 1]?.split('?')[0]?.split('#')[0] || raw;
+    }
+
+    token = token.trim();
+    if (!token) {
+      toast.error('Please enter a valid request link or token');
+      return;
+    }
+
+    setIsRedeemModalOpen(false);
+    navigate(`/request-access/${token}`);
+  };
 
   // Decision Modal State
   const [approvingRequest, setApprovingRequest] = useState<AccessRequest | null>(null);
@@ -207,28 +236,40 @@ export const RequestsPage: React.FC = () => {
   return (
     <div className="container" style={{ padding: '2rem 0 4rem' }}>
       {/* Page Header */}
-      <div style={{ marginBottom: '1.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.375rem' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: 'var(--radius-sm)',
-            backgroundColor: 'rgba(217, 154, 103, 0.15)',
-            border: '1px solid rgba(217, 154, 103, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--copper-dark)',
-          }}>
-            <KeyRound size={17} />
+      <div style={{ marginBottom: '1.75rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.375rem' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(217, 154, 103, 0.15)',
+              border: '1px solid rgba(217, 154, 103, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--copper-dark)',
+            }}>
+              <KeyRound size={17} />
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--graphite)' }}>
+              Access Requests
+            </h1>
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--graphite)' }}>
-            Access Requests
-          </h1>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
+            Manage permission requests for your confidential documents and track your submitted access inquiries.
+          </p>
         </div>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
-          Manage permission requests for your confidential documents and track your submitted access inquiries.
-        </p>
+
+        <button
+          type="button"
+          onClick={() => setIsRedeemModalOpen(true)}
+          className="btn btn-primary btn-sm"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
+        >
+          <Link2 size={14} />
+          <span>Paste / Redeem Request Link</span>
+        </button>
       </div>
 
       {/* Tabs */}
@@ -892,6 +933,67 @@ export const RequestsPage: React.FC = () => {
                 {isRejecting ? 'Declining...' : 'Decline Request'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Redeem Request Link Modal */}
+      {isRedeemModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsRedeemModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Link2 size={18} color="var(--copper-dark)" />
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--graphite)', margin: 0 }}>
+                  Paste Request Link or Token
+                </h2>
+              </div>
+              <button 
+                onClick={() => setIsRedeemModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRedeemSubmit}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                Did a document owner share an access request link or reference token with you? Paste it below to view the document information and submit your access request:
+              </p>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
+                  Request Link or Reference Token <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="https://.../request-access/TOKEN or token"
+                  value={redeemInput}
+                  onChange={(e) => setRedeemInput(e.target.value)}
+                  autoFocus
+                  required
+                  style={{ fontSize: '0.8125rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.625rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsRedeemModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={!redeemInput.trim()}
+                >
+                  Continue to Request Form
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
