@@ -49,25 +49,6 @@ def test_db_session(test_temp_dir):
         from sqlalchemy import text
         engine = create_engine(pg_url, pool_pre_ping=True)
         Base.metadata.create_all(bind=engine)
-        with engine.connect() as conn:
-            conn.execute(text("""
-                CREATE OR REPLACE VIEW ai_document_metadata_view AS
-                SELECT
-                    id,
-                    owner_id,
-                    title,
-                    original_filename,
-                    file_size,
-                    category,
-                    classification,
-                    detected_media_type,
-                    checksum,
-                    created_at,
-                    updated_at
-                FROM documents
-                WHERE deleted_at IS NULL;
-            """))
-            conn.commit()
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         session = TestingSessionLocal()
         try:
