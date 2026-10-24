@@ -13,6 +13,11 @@ import subprocess
 from pathlib import Path
 import pytest
 
+# Ensure repository root is on sys.path so scripts can be imported when running from backend directory
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from scripts.audit_supply_chain import (
     check_backend_pinning,
     check_frontend_pinning,
