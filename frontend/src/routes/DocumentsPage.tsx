@@ -810,7 +810,7 @@ export const DocumentsPage: React.FC = () => {
 
       {/* ================= TRASH AUDIT INSPECTION MODAL ================= */}
       {inspectingTrashedDoc && (
-        <div className="modal-backdrop" onClick={() => setInspectingTrashedDoc(null)}>
+        <div className="modal-overlay" onClick={() => setInspectingTrashedDoc(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '85vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
               <div>
