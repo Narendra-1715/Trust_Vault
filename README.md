@@ -1,437 +1,369 @@
 # TrustVault
 
 > **Enterprise Confidential Document Management Platform**  
-> *Engineered around server-side zero-trust authorization, transactional access revocation, tamper-evident cryptographic auditing, and human-in-the-loop AI assistance.*
+> *Engineered around server-side zero-trust authorization, AES-256-GCM envelope encryption, native PostgreSQL 16 Row-Level Security, tamper-evident cryptographic auditing, and human-in-the-loop AI assistance.*
 
 🌐 **Live Application**: [https://trustvault-ui.onrender.com](https://trustvault-ui.onrender.com/)  
-📚 **API Documentation**: [https://trustvault-api-s6ba.onrender.com/docs](https://trustvault-api-s6ba.onrender.com/docs)
+📚 **API Documentation**: [https://trustvault-api-s6ba.onrender.com/docs](https://trustvault-api-s6ba.onrender.com/docs)  
+🩺 **Health Endpoint**: [https://trustvault-api-s6ba.onrender.com/api/v1/health](https://trustvault-api-s6ba.onrender.com/api/v1/health)
 
 ---
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-trustvault--ui.onrender.com-brightgreen?style=flat-square&logo=render)](https://trustvault-ui.onrender.com/)
 [![CI Pipeline](https://github.com/Narendra-1715/Trust_Vault/actions/workflows/ci.yml/badge.svg)](https://github.com/Narendra-1715/Trust_Vault/actions)
-[![Security Architecture](https://img.shields.io/badge/Security-Zero--Trust%20Server--Side-blue?style=flat-square)](THREATS.md)
-[![Audit Ledger](https://img.shields.io/badge/Audit-SHA--256%20Hash%20Chained-emerald?style=flat-square)](#4-tamper-evident-cryptographic-audit-ledger)
-[![Authorization Matrix](https://img.shields.io/badge/AuthZ-Row--Level%20Enforced-navy?style=flat-square)](#3-centralized-authorization-matrix)
-[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.14-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![Security Invariants](https://img.shields.io/badge/Security%20Invariants-6%2F6%20Enforced-blue?style=flat-square)](THREATS.md)
+[![Test Suite](https://img.shields.io/badge/Tests-165%20Passed%20(Hypothesis%20%2B%20PostgreSQL%2016)-success?style=flat-square)](#7-automated-security-test-suite--pentest-validation)
+[![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM%20Envelope-blueviolet?style=flat-square)](#2-key-architectural-features)
+[![PostgreSQL 16](https://img.shields.io/badge/Database-PostgreSQL%2016%20RLS-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB?style=flat-square&logo=react)](https://react.dev/)
-[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2016-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB?style=flat-square&logo=react)](https://react.dev/)
 
 ---
 
 ## Table of Contents
 
-1. [Executive Overview & Non-Negotiable Invariants](#1-executive-overview--non-negotiable-invariants)
-2. [System Architecture](#2-system-architecture)
-3. [Centralized Authorization Matrix](#3-centralized-authorization-matrix)
-4. [Tamper-Evident Cryptographic Audit Ledger](#4-tamper-evident-cryptographic-audit-ledger)
-5. [Private Storage & File Security Model](#5-private-storage--file-security-model)
-6. [Human-in-the-Loop AI Architecture](#6-human-in-the-loop-ai-architecture)
-7. [API Endpoint Directory](#7-api-endpoint-directory)
-8. [Automated Security Test Suite](#8-automated-security-test-suite)
-9. [Local Quickstart & Execution](#9-local-quickstart--execution)
-10. [Docker Compose & Production Deployment](#10-docker-compose--production-deployment)
-11. [Development Fixtures & Demonstration Script](#11-development-fixtures--demonstration-script)
-12. [Threat Model & Accepted Limitations](#12-threat-model--accepted-limitations)
-13. [Engineering Transparency & Prompts Log](#13-engineering-transparency--prompts-log)
+1. [Non-Negotiable Security Invariants](#1-non-negotiable-security-invariants)
+2. [Key Architectural Features](#2-key-architectural-features)
+3. [System Architecture Diagram](#3-system-architecture-diagram)
+4. [Centralized Authorization & Access Matrix](#4-centralized-authorization--access-matrix)
+5. [Tamper-Evident Cryptographic Audit Ledger](#5-tamper-evident-cryptographic-audit-ledger)
+6. [Human-in-the-Loop AI Boundary (Invariant I6)](#6-human-in-the-loop-ai-boundary-invariant-i6)
+7. [Automated Security Test Suite & Pentest Validation](#7-automated-security-test-suite--pentest-validation)
+8. [API Endpoint Directory](#8-api-endpoint-directory)
+9. [Demonstration Personas & Evaluation Walkthrough](#9-demonstration-personas--evaluation-walkthrough)
+10. [Local Quickstart & Execution](#10-local-quickstart--execution)
+11. [Production Deployment & Environment Variables](#11-production-deployment--environment-variables)
+12. [Security Architecture & Threat Model](#12-security-architecture--threat-model)
 
 ---
 
-## 1. Executive Overview & Non-Negotiable Invariants
+## 1. Non-Negotiable Security Invariants
 
-TrustVault is a confidential document repository designed to protect high-value business assets (financial reports, executive roadmaps, contracts, and IP) from both external threat actors and unauthorized authenticated insiders.
+TrustVault is constructed upon six inviolable architectural invariants:
 
-### Core Architectural Invariants
-
-- **Server-Side Sole Authority:** Access decisions are made exclusively on the backend. Client-supplied roles, cached tokens, and hidden UI controls are untrusted.
-- **Immediate Permission Revocation:** Download URLs are short-lived and non-static. Downloads are streamed directly through authenticated endpoints that re-query the database within the active transaction; revocation is instantaneous on the subsequent request.
-- **Information-Leak Prevention:** Requests for inaccessible documents return a uniform `404 Not Found` (never `403 Forbidden`), preventing attackers from enumerating private document existence.
-- **Isolated Private Storage:** Document binaries are stored outside the public web root under randomized UUID keys with enforced extension allowlists, size limits, and magic-byte signature validation.
-- **Tamper-Evident Audit Ledger:** Every state-altering action appends an immutable audit event linked via canonical JSON serialization and SHA-256 hash chaining.
-- **Advisory AI Boundaries:** External LLMs operate exclusively on document metadata. AI models possess **zero database write permissions**; permission grants require explicit human owner approval.
+| Invariant | Name | Architectural Enforcement |
+| :---: | :--- | :--- |
+| **I1** | **Server-Side Sole Authority** | Access decisions are executed exclusively by the backend centralized `AuthorizationService`. Client tokens, UI states, and claims are completely untrusted. |
+| **I2** | **Immediate Revocation** | Downloads are dynamically authorized and streamed within the active transaction. Permissions are re-checked upon every request; revocation is instant on the subsequent byte stream. |
+| **I3** | **Zero Information Leaks** | Access attempts to unowned or unpermitted documents return a uniform `404 Not Found` (never `403`), backed by timing-equalized dummy queries to prevent resource enumeration. |
+| **I4** | **Tamper-Evident Ledger** | Every state-altering action appends an immutable audit event linked via deterministic canonical JSON serialization and SHA-256 cryptographic hash chaining from a fixed genesis block. |
+| **I5** | **Private File Boundary** | Files are stored outside the web root under randomized UUID keys with extension allowlists, 25MB stream limits, and magic-byte header validation. |
+| **I6** | **AI Zero-Write Boundary** | Advisory LLMs interact exclusively with sanitized metadata via `ai_document_metadata_view` with **zero database write permissions**; all permissions require explicit human owner approval. |
 
 ---
 
-## 2. System Architecture
+## 2. Key Architectural Features
+
+### Cryptographic Envelope Encryption (AES-256-GCM)
+- **Per-Document Keys:** Every uploaded document is encrypted with an isolated 256-bit AES-GCM Data Encryption Key (DEK).
+- **Master Key Derivation:** Master key is derived using HKDF-SHA256 with cryptographically random salt and context parameters.
+- **Key Rotation & Multi-Version Support:** Key metadata is managed in a dedicated `DocumentKey` schema, supporting on-demand key re-encryption without re-encrypting the underlying storage binary.
+
+### Native PostgreSQL 16 Row-Level Security (RLS)
+- **Database-Level Isolation:** Multi-tenant boundaries enforced directly by PostgreSQL RLS policies (`CREATE POLICY ON documents`).
+- **Parameterized Session Scoping:** Session boundaries are established per request using PostgreSQL's native `SELECT set_config('app.current_user_id', :uid, true)` and `SELECT set_config('app.current_org_id', :org, true)`.
+- **Role Separation:** Distinct database roles provisioned for specific operational domains: `app_rw`, `migrator`, `audit_writer`, `ai_readonly`, and `backup_ro`.
+
+### Enterprise Governance & Access Lifecycles
+- **Time-Bound Permissions:** Access grants support mandatory `expires_at` timestamps with automatic server-side pruning.
+- **Self-Service Access Requests:** Viewers can request access with business justifications; owners review, grant, or deny through dual-custody controls.
+- **Compliance Access Reviews:** Periodic recertification workflows allow owners and security compliance officers to audit active permissions.
+- **Audited Break-Glass Access:** Emergency administrative access protocol requiring documented justification, generating high-priority security audit events.
+
+### Multi-Backend Storage Engine
+- **Cloud & Local Storage:** Pluggable storage architecture supporting AWS S3, Supabase Storage (S3-compatible via `boto3`), and isolated local disk volumes.
+- **Fail-Safe Integrity:** Pre-stream SHA-256 checksum verification ensures corrupted files fail safely without leaking partial buffers.
+- **Magic-Byte Signature Inspection:** Validates binary headers against format signatures (PDF, DOCX, XLSX, PNG, JPEG) to reject spoofed extensions.
+
+### Perimeter Defense & Threat Prevention
+- **Sliding-Window Rate Limiting:** In-memory and Redis-ready rate limiters for IP addresses, authentication attempts, downloads, and AI suggestions.
+- **Argon2id Password Hashing:** RFC 9106 memory-hard password hashing with per-user salts.
+- **Session Revocation & Tracking:** User sessions tracked with unique IDs; instant single-session or all-session invalidation on logout or password reset.
+- **Anomaly Detection:** Real-time security alerts for brute-force bursts, abnormal downloading patterns, and privilege escalation attempts.
+
+---
+
+## 3. System Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Untrusted Client Tier"]
-        Browser["React 19 + TypeScript SPA<br/>(Restrained Enterprise UI)"]
+    subgraph ClientLayer["Client Tier (Untrusted)"]
+        Browser["React 19 + TypeScript SPA<br/>(Modern Enterprise Security Dashboard)"]
     end
 
-    subgraph Perimeter["Edge & Reverse Proxy Tier"]
-        Proxy["Nginx / Reverse Proxy<br/>(Security Headers, TLS, Host Checks)"]
-        Limiter["Sliding-Window IP Rate Limiter<br/>(Brute-Force & Abuse Mitigation)"]
+    subgraph Perimeter["Perimeter & Edge Tier"]
+        Proxy["Reverse Proxy / Cloudflare<br/>(TLS 1.3, Strict CSP, HSTS, CORS)"]
+        Limiter["Sliding-Window Rate Limiter<br/>(Auth, Download, & AI Limits)"]
     end
 
-    subgraph CoreBackend["Trusted Backend Tier (FastAPI)"]
-        Authn["Argon2id Auth Engine<br/>(RFC 9106, Memory-Hard Hashes)"]
-        PolicyEngine["Centralized Policy Engine<br/>(AuthorizationPolicy)"]
-        StorageEngine["Private Storage Manager<br/>(Magic-Byte & Stream Protection)"]
-        AuditEngine["Audit Hash Chainer<br/>(Canonical JSON + SHA-256)"]
-        AIService["AI Advisory Service<br/>(Gemini 3.8 Flash / Deterministic Mock)"]
+    subgraph Backend["Trusted Backend Tier (FastAPI)"]
+        Authn["Argon2id Auth & Session Manager<br/>(JWT JTI Revocation, Anti-Enumeration)"]
+        Authz["Centralized Authorization Engine<br/>(ABAC + Org Isolation + Break-Glass)"]
+        CryptoEngine["Envelope Encryption Engine<br/>(AES-256-GCM + HKDF Master Key)"]
+        StorageAdapter["Private Storage Manager<br/>(Magic-Byte Check + Stream Capping)"]
+        AuditChainer["Tamper-Evident Audit Chainer<br/>(SHA-256 Chain + Genesis Block)"]
+        AIBoundary["AI Advisory Boundary (I6)<br/>(AIReadOnlySession + Sanitized View)"]
     end
 
-    subgraph Persistence["Persistent Storage Tier"]
-        Postgres[(PostgreSQL 16 Database<br/>Alembic Migrations)]
-        PrivateStorage[("Private Filesystem Storage<br/>(Outside Web Root, UUID Keys)")]
+    subgraph DataTier["Data Persistence Tier"]
+        Postgres[("PostgreSQL 16 Database<br/>(Row-Level Security + Roles)")]
+        VaultStorage[("Private Storage (S3 / Local)<br/>(UUID Blobs, Encrypted at Rest)")]
     end
 
     Browser -->|HTTPS + Bearer JWT| Proxy
     Proxy --> Limiter
     Limiter --> Authn
-    Authn --> PolicyEngine
-    PolicyEngine -->|Strict Row-Level Check| Postgres
-    PolicyEngine -->|Streaming Authorized IO| StorageEngine
-    StorageEngine --> PrivateStorage
-    PolicyEngine -->|Append-Only Chained Events| AuditEngine
-    AuditEngine --> Postgres
-    PolicyEngine -.->|Sanitized Metadata Only| AIService
+    Authn --> Authz
+    Authz --> CryptoEngine
+    CryptoEngine --> StorageAdapter
+    StorageAdapter --> VaultStorage
+    Authz -->|Parameterized Session RLS| Postgres
+    Authz -->|Append-Only Chained Events| AuditChainer
+    AuditChainer --> Postgres
+    Authz -.->|Read-Only Sanitized Metadata| AIBoundary
+    AIBoundary -.->|Zero DB Writes| Postgres
 ```
 
 ---
 
-## 3. Centralized Authorization Matrix
+## 4. Centralized Authorization & Access Matrix
 
-Global roles (`admin`, `owner`, `viewer`) govern administrative scopes, but **document-level permissions dictate document confidentiality**. An administrator role does not grant implicit content access unless an explicit permission has been granted.
+All authorization decisions pass through [`AuthorizationService`](backend/app/services/authorization.py). Global roles (`admin`, `owner`, `viewer`) govern platform administration, while **document-level permissions dictate confidential content access**:
 
 | Operation | Document Owner | Active `EDIT` Grant | Active `READ` Grant | Authenticated Outsider | Global Admin |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Upload Document** | Authorized | Authorized | Authorized | Authorized | Authorized |
-| **List Documents** | Own records | Permitted records | Permitted records | Isolated (0 leak) | Full inventory (audited) |
-| **View Metadata** | Authorized | Authorized | Authorized | **404 Not Found** | Explicit inventory audit |
+| **List Documents** | Own records | Permitted records | Permitted records | Isolated (0 leak) | Inventory audit |
+| **View Metadata** | Authorized | Authorized | Authorized | **404 Not Found** | Explicit audit |
 | **Stream Download** | Authorized | Authorized | Authorized | **404 Not Found** | **Denied** (requires grant) |
-| **Edit Metadata** | Authorized | Authorized | **403 Forbidden** | **404 Not Found** | **Denied** (requires grant) |
-| **Delete Document** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | Soft/Hard policy |
-| **Grant Access** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
-| **Revoke Access** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
+| **Edit Metadata / Replace** | Authorized | Authorized | **403 Forbidden** | **404 Not Found** | **Denied** (requires grant) |
+| **Delete Document** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | Admin soft-delete |
+| **Grant / Revoke Access** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
+| **Manage Access Requests** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
 | **Request AI Suggestions** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
 | **Approve AI Suggestions** | Authorized | **403 Forbidden** | **403 Forbidden** | **404 Not Found** | **Denied** (owner only) |
-| **View Document Audit** | Authorized | Authorized | Authorized | **404 Not Found** | Authorized (audited) |
-| **Verify Audit Ledger** | Denied | Denied | Denied | Denied | Authorized |
-| **Manage User Roles** | Denied | Denied | Denied | Denied | Authorized |
+| **Execute Break-Glass** | Denied | Denied | Denied | Denied | **Audited Dual-Control** |
+| **Verify Audit Ledger** | Authorized | Authorized | Authorized | Authorized | Authorized |
 
 ---
 
-## 4. Tamper-Evident Cryptographic Audit Ledger
+## 5. Tamper-Evident Cryptographic Audit Ledger
 
-Every security-sensitive event is linked to its chronological predecessor using a deterministic SHA-256 hash chain:
+Every security-sensitive event produces an immutable cryptographic digest linked to its chronological predecessor:
 
 ```mermaid
 flowchart LR
-    Genesis["Genesis State<br/>previous_hash = 0^64"] --> Event1["Event 1 (Upload)<br/>SHA256(CanonicalPayload_1)"]
+    Genesis["Genesis Block<br/>previous_hash = 0^64"] --> Event1["Event 1 (Upload)<br/>SHA256(CanonicalPayload_1)"]
     Event1 --> Event2["Event 2 (Grant)<br/>SHA256(CanonicalPayload_2)"]
     Event2 --> Event3["Event 3 (Download)<br/>SHA256(CanonicalPayload_3)"]
     Event3 --> EventN["Event N (Revoke)<br/>SHA256(CanonicalPayload_N)"]
 ```
 
-### Mathematical Formulation
+### Mathematical Chain Formulation
 
-Every event $i$ produces an immutable cryptographic digest $H_i$ linked directly to the prior digest $H_{i-1}$:
+Every event $i$ generates a SHA-256 digest $H_i$ computed from deterministic canonical JSON:
 
 $$H_i = \mathrm{SHA256}\Big(\mathrm{CanonicalJSON}(e_i)\Big)$$
 
-where the canonical payload $e_i$ is deterministically ordered:
+where payload $e_i$ contains normalized fields:
 
-$$e_i = \Big( \text{id}, \text{timestamp}_{\text{UTC}}, \text{actor}, \text{action}, \text{resource}, \text{outcome}, \text{metadata}, H_{i-1} \Big)$$
+$$e_i = \Big( \text{id}, \text{timestamp}_{\text{UTC}}, \text{actor\_id}, \text{action}, \text{resource\_id}, \text{outcome}, \text{metadata}, H_{i-1} \Big)$$
 
-For the genesis event ($i = 0$):
+For the genesis record ($i = 0$): $H_0 = 0^{64}$.
 
-$$H_0 = 0^{64}$$
-
-Canonical serialization ensures byte-for-byte consistency before hashing:
-
-```json
-{
-  "action": "document.upload",
-  "actor_id": "3b2c1a44-...",
-  "id": "e7d8f9a0-...",
-  "outcome": "success",
-  "previous_event_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "request_id": "a1b2c3d4-...",
-  "resource_id": "f5e4d3c2-...",
-  "resource_type": "document",
-  "structured_metadata": {
-    "category": "Financial",
-    "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "filename": "Q3_Audit.pdf"
-  },
-  "timestamp": "2026-10-21T18:07:53.804589Z"
-}
-```
-
-- **Deterministic Normalization:** Timestamps are normalized to strict ISO-8601 UTC strings (`%Y-%m-%dT%H:%M:%S.%fZ`), preventing serialization divergence across database engines.
-- **Verification Engine:** Executed via `GET /api/v1/audit/verify`. Recalculates the hash chain from genesis ($0^{64}$) forward. Any altered payload, deleted row, or reordered sequence causes an immediate hash mismatch and identifies the exact tampered record.
+- **Tamper Detection:** Modifying any historical row, deleting an event, or altering sequence timestamps breaks the chain and flags the exact corrupted record index via `GET /api/v1/audit/verify`.
 
 ---
 
-## 5. Private Storage & File Security Model
+## 6. Human-in-the-Loop AI Boundary (Invariant I6)
 
-1. **Path-Traversal Protection:** Original filenames are stripped of relative traversal tokens (`../`, `..\`), slashes, and null bytes (`\0`). Files are written to `/data/vault_storage/{uuid4}.bin`.
-2. **Magic-Byte Signature Inspection:** File headers are validated against signature allowlists prior to processing:
-   - PDF: `%PDF`
-   - Microsoft Office (DOCX/XLSX/PPTX): `PK\x03\x04`
-   - PNG: `\x89PNG\r\n\x1a\n`
-   - JPEG: `\xff\xd8\xff`
-3. **Capacity Boundaries:** Streams are capped at 25MB (`MAX_FILE_SIZE_BYTES`); violations trigger automatic buffer cleanup and storage removal.
-4. **Authorized Streaming:** Content is transferred using chunked `StreamingResponse` with:
-   - `Content-Disposition: attachment; filename="..."`
-   - `X-Content-Type-Options: nosniff`
-   - Authenticated permission evaluation preceding byte dispatch.
-
----
-
-## 6. Human-in-the-Loop AI Architecture
-
-TrustVault incorporates an advisory AI integration designed to assist document owners in setting minimum-necessary access permissions while preventing autonomous privilege escalation.
+TrustVault integrates advisory AI assistance (Google Gemini 2.5 Flash / deterministic offline fallback) while preventing autonomous privilege escalation:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Owner as Document Owner
     participant API as FastAPI Backend
-    participant AI as Gemini 3.8 Flash / Mock Adapter
-    participant DB as PostgreSQL Database
+    participant AI as Gemini 2.5 Flash / Mock Adapter
+    participant DB as PostgreSQL 16 Database
 
     Owner->>API: POST /documents/{id}/ai-recommendations
-    Note over API: Verifies Owner Authority & Sanitizes Metadata
-    API->>AI: Generate recommendations (Title, Category, Candidate Roles)
-    AI-->>API: Validated JSON Response (SuggestedGrant Schema)
-    API->>DB: Persist suggestion as PENDING (Zero grants created)
+    Note over API: Verifies Owner Authority & Queries Sanitized View
+    API->>AI: Generate candidate access grants from metadata
+    AI-->>API: Structured SuggestedGrant JSON Schema
+    API->>DB: Store in ai_access_suggestions (Status: PENDING)
     API-->>Owner: Display suggestions with confidence & rationale
-    Owner->>API: POST /documents/{id}/ai-recommendations/approve (Explicit selection)
-    Note over API: Re-verifies Owner Authority & Validates Grants
-    API->>DB: Insert DocumentPermission records in active transaction
+    Note over Owner: Human Owner Reviews & Selects Grants
+    Owner->>API: POST /documents/{id}/ai-recommendations/approve
+    Note over API: Re-validates Ownership & Applies Grants in Transaction
+    API->>DB: Insert DocumentPermission records
     API->>DB: Append AUDIT event (ai.recommendation.approved)
     API-->>Owner: Applied permissions confirmed
 ```
 
-- **Prompt Injection Defense:** Model inputs are restricted to structured metadata; raw document binaries are never sent to external model providers.
-- **Fail-Safe Operation:** If the Gemini API experiences upstream throttling (e.g. 503) or is unconfigured, the system automatically uses the deterministic [`MockAIProvider`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/backend/app/ai/mock_provider.py) while explicitly labeling `is_mock: true`.
+- **Zero Database Write Access:** Enforced via `AIReadOnlySession` and PostgreSQL `ai_readonly` role.
+- **Sanitized Metadata Isolation:** The AI engine accesses exclusively `ai_document_metadata_view`; document binaries and raw contents are never transmitted.
+- **No Autonomous Grants:** Recommendations remain strictly inert until an authenticated owner approves them.
 
 ---
 
-## 7. API Endpoint Directory
+## 7. Automated Security Test Suite & Pentest Validation
 
-All endpoints are versioned under `/api/v1` and document security schemas in OpenAPI (`/docs`).
-
-| Method | Endpoint | Authentication | Required Authorization | Audit Event Logged |
-| :--- | :--- | :---: | :---: | :--- |
-| `POST` | `/api/v1/auth/login` | Anonymous | Rate Limited | `auth.login.success` / `auth.login.failed` |
-| `POST` | `/api/v1/auth/register` | Anonymous | Open / Configured | `auth.register` |
-| `GET` | `/api/v1/auth/me` | Bearer Token | Active User | None |
-| `GET` | `/api/v1/users` | Bearer Token | Active User | None |
-| `PATCH` | `/api/v1/users/{id}` | Bearer Token | **Admin Role** | `admin.user.update` |
-| `POST` | `/api/v1/documents/upload` | Bearer Token | Active User | `document.upload` |
-| `GET` | `/api/v1/documents` | Bearer Token | Row-Level Filter | None |
-| `GET` | `/api/v1/documents/{id}` | Bearer Token | Document Owner / Reader | None (Consistent 404 on unauth) |
-| `GET` | `/api/v1/documents/{id}/download` | Bearer Token | Document Owner / Reader | `document.download` (or `.denied`) |
-| `PATCH` | `/api/v1/documents/{id}` | Bearer Token | Document Owner / Editor | `document.update` |
-| `DELETE` | `/api/v1/documents/{id}` | Bearer Token | **Document Owner Only** | `document.delete` |
-| `GET` | `/api/v1/documents/{id}/permissions` | Bearer Token | Document Owner / Reader | None |
-| `POST` | `/api/v1/documents/{id}/permissions` | Bearer Token | **Document Owner Only** | `permission.grant` / `permission.update` |
-| `DELETE` | `/api/v1/documents/{id}/permissions/{u_id}` | Bearer Token | **Document Owner Only** | `permission.revoke` |
-| `POST` | `/api/v1/documents/{id}/ai-recommendations` | Bearer Token | **Document Owner Only** | `ai.recommendation.generated` |
-| `POST` | `/api/v1/documents/{id}/ai-recommendations/approve` | Bearer Token | **Document Owner Only** | `ai.recommendation.approved` |
-| `POST` | `/api/v1/documents/{id}/ai-recommendations/reject` | Bearer Token | **Document Owner Only** | `ai.recommendation.rejected` |
-| `GET` | `/api/v1/audit/events` | Bearer Token | Admin or Document Owner | None |
-| `GET` | `/api/v1/audit/verify` | Bearer Token | Active User / Admin | `audit.verify` |
-| `GET` | `/api/v1/health` | Anonymous | Public Health Probe | None |
-
----
-
-## 8. Automated Security Test Suite
-
-The platform includes 35 comprehensive integration, security, and fail-safe test cases executed against isolated test databases and private storage instances.
+The platform includes **165 automated security, integration, property-based, and pentest simulation tests** running against PostgreSQL 16:
 
 ```bash
 cd backend
-python -m pytest -v
+pytest -v --tb=short
 ```
 
-### Verified Test Results
+### Test Suite Architecture (37 Test Modules)
 
-| Security Category | Test Identifier | Assertion & Invariant Verified | Result |
-| :--- | :--- | :--- | :---: |
-| **Authentication** | `test_unauthenticated_request_rejected` | Protected endpoints return 401 without bearer token | `PASSED` |
-| | `test_valid_login_success` | Argon2id verification succeeds; issues valid JWT | `PASSED` |
-| | `test_invalid_password_rejected_with_generic_message` | Rejection details prevent username enumeration | `PASSED` |
-| | `test_nonexistent_user_rejected_with_generic_message` | Non-existent accounts receive generic rejection message | `PASSED` |
-| | `test_disabled_user_login_prevented` | Inactive accounts receive 403 Forbidden | `PASSED` |
-| | `test_tampered_bearer_token_rejected` | Modified JWT signatures return 401 Unauthorized | `PASSED` |
-| | `test_admin_self_registration_rejected` | Registration payload requesting admin role is rejected (422) | `PASSED` |
-| **Authorization** | `test_cross_user_read_isolation_returns_404` | Owner A cannot read Owner B's document (returns 404) | `PASSED` |
-| | `test_cross_user_download_isolation_returns_404` | Owner A cannot download Owner B's file (returns 404) | `PASSED` |
-| | `test_cross_user_edit_denied` | Metadata edit attempts on unowned documents return 404 | `PASSED` |
-| | `test_cross_user_delete_denied` | Delete attempts on unowned documents return 404 | `PASSED` |
-| | `test_viewer_with_read_access_cannot_edit` | Viewers with `read` permission cannot edit (returns 403) | `PASSED` |
-| | `test_viewer_cannot_grant_permissions` | Viewers cannot grant permissions to third parties (403) | `PASSED` |
-| | `test_search_never_reveals_unauthorized_documents` | Search queries exclude inaccessible documents | `PASSED` |
-| | `test_viewer_cannot_enumerate_users` | Viewers receive 403 when attempting to access user directory | `PASSED` |
-| | `test_owner_gets_minimal_user_directory` | Owners receive minimal directory attributes without role leakage | `PASSED` |
-| | `test_admin_only_users_all_endpoint` | Only admins can view complete internal user directory | `PASSED` |
-| | `test_peer_owner_isolation_in_same_organization` | Lateral isolation prevents peer owners from accessing each other | `PASSED` |
-| **Revocation** | `test_immediate_permission_revocation_lifecycle` | Revocation immediately denies the next request (404) | `PASSED` |
-| **Storage & Fail-Safe** | `test_s3_storage_adapter_save_read_delete` | S3-compatible private storage save, read, and delete verify | `PASSED` |
-| | `test_s3_storage_fails_fast_without_silent_fallback` | Missing S3 config raises fast RuntimeError (no split-brain) | `PASSED` |
-| | `test_invalid_storage_backend_rejected` | Unrecognized storage backends raise immediate RuntimeError | `PASSED` |
-| | `test_local_storage_backend_selected` | Explicit local backend activates LocalPrivateStorage safely | `PASSED` |
-| | `test_health_reports_storage_backend_and_dependencies` | /health exposes backend type and dependency reachability | `PASSED` |
-| | `test_storage_checksum_corruption_detection` | Pre-stream SHA-256 validation catches disk corruption (500) | `PASSED` |
-| | `test_executable_upload_rejected` | Executable file extensions are rejected (400) | `PASSED` |
-| | `test_mime_magic_byte_spoofing_rejected` | Spoofed extensions without magic bytes are rejected (400) | `PASSED` |
-| | `test_filename_sanitization_strips_path_traversal` | Relative directory paths and null bytes are sanitized | `PASSED` |
-| | `test_document_deletion_removes_private_file` | Deleting document removes binary from private storage | `PASSED` |
-| | `test_missing_storage_file_fails_safely_without_silent_fabrication` | Missing storage file returns 500 without dummy data fabrication | `PASSED` |
-| **Audit Integrity** | `test_audit_event_generation_and_valid_hash_chain` | Chained SHA-256 events pass full verification | `PASSED` |
-| | `test_tampering_event_payload_detected` | Payload alteration causes hash mismatch detection | `PASSED` |
-| | `test_tampering_event_deletion_detected` | Deleting a record triggers a chain-break detection | `PASSED` |
-| **AI Boundaries** | `test_ai_mock_recommendation_and_explicit_approval_workflow` | AI suggestions create zero grants until owner approves | `PASSED` |
-| | `test_ai_recommendation_rejection_leaves_no_grants` | Rejecting AI recommendations creates zero grants | `PASSED` |
-
-```text
-======================= 35 passed, 2 warnings in 18.17s =======================
-```
+| Security Category | Test Files | Target Invariant & Coverage |
+| :--- | :--- | :--- |
+| **Authentication & Sessions** | `test_auth.py`, `test_session_management.py` | Argon2id verification, JWT JTI revocation, sliding-window rate limiters, anti-enumeration |
+| **Authorization & Isolation** | `test_authorization.py`, `test_authorization_matrix.py`, `test_admin_control.py` | Invariants I1 & I3: Complete ABAC matrix, lateral tenant isolation, cross-user denial |
+| **PostgreSQL 16 RLS & Roles** | `test_no_direct_permission_checks.py`, Alembic migrations | DB-level row security, `set_config` transaction parameters, role privileges |
+| **Envelope Encryption** | `test_encryption_envelope.py`, `test_document_versions.py` | AES-256-GCM per-document encryption, HKDF key derivation, multi-version document keys |
+| **Revocation & Streaming** | `test_revocation.py`, `test_revocation_and_streaming.py` | Invariant I2: Immediate transactional download revocation, chunked authorized streaming |
+| **Storage & File Security** | `test_s3_storage.py`, `test_storage_uploads.py`, `test_storage_fail_safe.py` | Invariant I5: Magic-byte inspection, path traversal sanitization, fail-safe no split-brain |
+| **Cryptographic Audit Ledger** | `test_audit_integrity.py`, `test_audit_ledger_phase5.py`, `test_audit_export.py` | Invariant I4: SHA-256 hash chaining, genesis block verification, tampering & deletion detection |
+| **AI Boundary & Invariant I6** | `test_ai_boundary_phase6.py`, `test_ai_recommendations.py` | Invariant I6: Zero-write DB boundary (`AIReadOnlySession`), owner approval lifecycle |
+| **Governance & Access Lifecycles**| `test_access_expiry.py`, `test_access_requests.py`, `test_access_reviews.py` | Time-bound permission expiry, dual-custody access requests, compliance access reviews |
+| **Emergency Break-Glass** | `test_break_glass_phase7.py` | Audited emergency access, dual-custody justification requirement |
+| **Anomaly Detection & Alerts** | `test_suspicious_activity.py`, `test_security_alerts.py` | Brute-force burst detection, suspicious download anomaly alerts |
+| **Property-Based Testing** | `test_authorization_hypothesis.py`, `test_property_based.py` | Hypothesis fuzzing with 100+ random permission and role permutations |
+| **Pentest & Adversarial Sims** | `test_pentest_simulation_phase12.py`, `test_external_posture_phase9.py` | Active penetration test simulations, CSP/HSTS headers, supply chain vulnerability audit |
 
 ---
 
-## 9. Local Quickstart & Execution
+## 8. API Endpoint Directory
+
+All endpoints are versioned under `/api/v1` and fully documented in Swagger UI (`/docs`):
+
+### Authentication & Sessions
+- `POST /api/v1/auth/login` — Authenticate credentials with Argon2id, rate-limited by IP and user.
+- `POST /api/v1/auth/register` — Register new user account with role validation.
+- `GET /api/v1/auth/me` — Retrieve active user session profile.
+- `POST /api/v1/auth/logout` — Invalidate current session token (JTI blacklist).
+- `POST /api/v1/auth/logout-all` — Revoke all active sessions for the authenticated user.
+
+### Confidential Documents & Storage
+- `POST /api/v1/documents/upload` — Upload and envelope-encrypt document (AES-256-GCM + magic bytes).
+- `GET /api/v1/documents` — List authorized documents (filtered by owner and explicit grants).
+- `GET /api/v1/documents/{id}` — Retrieve document metadata (uniform 404 on unpermitted).
+- `GET /api/v1/documents/{id}/download` — Stream decrypted document bytes (authorized transactionally).
+- `PATCH /api/v1/documents/{id}` — Update document classification metadata.
+- `DELETE /api/v1/documents/{id}` — Delete document binary and purge encryption keys (owner only).
+
+### Access Control & Governance
+- `GET /api/v1/documents/{id}/permissions` — List active permission grants for a document.
+- `POST /api/v1/documents/{id}/permissions` — Grant or update user permissions with optional expiry.
+- `DELETE /api/v1/documents/{id}/permissions/{user_id}` — Revoke permissions immediately.
+- `POST /api/v1/access-requests` — Submit self-service access request with business justification.
+- `GET /api/v1/access-requests` — View pending access requests for owned documents.
+- `POST /api/v1/access-requests/{id}/approve` — Approve access request (dual-custody).
+- `POST /api/v1/access-requests/{id}/deny` — Deny access request with reason.
+- `POST /api/v1/admin/break-glass` — Execute emergency audited break-glass access (admins only).
+
+### AI Advisory Recommendations (Invariant I6)
+- `POST /api/v1/documents/{id}/ai-recommendations` — Generate pending access recommendations (zero DB writes).
+- `POST /api/v1/documents/{id}/ai-recommendations/approve` — Explicitly apply selected recommendations.
+- `POST /api/v1/documents/{id}/ai-recommendations/reject` — Dismiss pending recommendations.
+
+### Audit Ledger & Health
+- `GET /api/v1/audit/events` — Retrieve tamper-evident audit trail (paginated, scoped).
+- `GET /api/v1/audit/verify` — Verify cryptographic SHA-256 hash chain from genesis block.
+- `GET /api/v1/audit/export` — Export cryptographically verifiable audit ledger in CSV/JSON format.
+- `GET /api/v1/health` — Public health probe reporting storage backend and database connectivity.
+
+---
+
+## 9. Demonstration Personas & Evaluation Walkthrough
+
+The platform includes pre-seeded demo accounts with distinct personas (`backend/seed.py`):
+
+| Persona | Email | Password | Role & Authorization Scope |
+| :--- | :--- | :--- | :--- |
+| **Alice** | `owner_a@trustvault.com` | `OwnerAPass123!` | **Document Owner A** (Uploads, grants/revokes access, approves AI) |
+| **Bob** | `owner_b@trustvault.com` | `OwnerBPass123!` | **Document Owner B** (Completely isolated tenant; zero cross-access) |
+| **Carol** | `viewer_a@trustvault.com` | `ViewerAPass123!` | **Restricted Viewer** (Read-only access strictly when explicitly granted) |
+| **Admin** | `admin@trustvault.com` | `AdminPass123!` | **Security Administrator** (Audit ledger verification, emergency break-glass) |
+
+### 5-Minute Evaluation Walkthrough
+
+1. **Sign In as Owner (Alice):** Navigate to [https://trustvault-ui.onrender.com/login](https://trustvault-ui.onrender.com/login), click the quick-login persona **Alice**, and sign in.
+2. **Upload & Envelope Encryption:** Click **Upload Document**, attach a sample PDF or TXT file, set classification to `Confidential`, and upload. Notice the automatic SHA-256 checksum and envelope encryption key creation.
+3. **Grant Explicit Access:** Open the document, go to **Sharing & Permissions**, grant `Read Only` access to **Carol Viewer (`viewer_a@trustvault.com`)**.
+4. **Verify Access as Viewer (Carol):** Switch to Carol using persona login. Carol can see and download the document.
+5. **Immediate Revocation:** Switch back to Alice and revoke Carol's access. Switch to Carol and refresh; the document instantly disappears from the UI, and direct API access to `/download` returns `404 Not Found`.
+6. **AI Advisory Recommendation:** As Alice, open a document and click **Request AI Recommendations**. Verify suggestions are presented with confidence scores and remain inert until Alice explicitly clicks **Approve**.
+7. **Verify Cryptographic Ledger:** Navigate to **Audit Trail** and click **Verify Ledger Integrity**. The backend recalculates the full SHA-256 hash chain from genesis ($0^{64}$) and confirms zero tampering.
+
+---
+
+## 10. Local Quickstart & Execution
 
 ### Prerequisites
-
-- Python 3.12+ (or Conda / virtual environment)
+- Python 3.12+
 - Node.js 20+ and npm
 
-### 1. Backend Setup & Seeding
-
-```powershell
+### 1. Backend Setup
+```bash
 cd backend
 python -m pip install -r requirements.txt
 python -m alembic upgrade head
 python seed.py
-```
-
-### 2. Start Backend Server
-
-```powershell
-cd backend
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-
 - API Base: `http://127.0.0.1:8000`
-- Interactive OpenAPI Docs: `http://127.0.0.1:8000/docs`
+- Interactive Docs: `http://127.0.0.1:8000/docs`
 - Health Probe: `http://127.0.0.1:8000/api/v1/health`
 
-### 3. Start Frontend Client
-
-```powershell
+### 2. Frontend Setup
+```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-- Web Client: `http://localhost:5173`
+- Web Application: `http://localhost:5173`
 
 ---
 
-## 10. Docker Compose & Production Deployment
+## 11. Production Deployment & Environment Variables
 
-For comprehensive step-by-step instructions across Render, Railway, Vercel, and Cloud VMs (AWS EC2/DigitalOcean), refer to the dedicated [**Production Deployment Guide (DEPLOYMENT.md)**](DEPLOYMENT.md).
+### Production Architecture on Render.com
+- **Frontend SPA:** Static site deployment on Render with client-side routing rewrites (`/* -> /index.html`).
+- **Backend API:** Python web service running FastAPI under Uvicorn with Gunicorn process management.
+- **Database:** Managed PostgreSQL 16 with Row-Level Security enabled.
+- **Storage:** S3-compatible object storage (Supabase Storage / AWS S3) with encrypted bucket policies.
 
-### Quick Multi-Container Production Launch
+### Environment Variable Reference
 
-```bash
-docker compose -f docker-compose.prod.yml up --build -d
-```
-
-Or execute the automated deployment script on any Linux/macOS host:
-
-```bash
-chmod +x scripts/deploy.sh
-./scripts/deploy.sh
-```
-
-### Turnkey 1-Click Cloud Deployment
-- **Render.com Blueprint:** Deploy managed PostgreSQL, FastAPI API, and React frontend via [`render.yaml`](render.yaml).
-- **Railway.app Deployment:** Deploy automatically using [`railway.json`](railway.json).
-
-### Production Environment Variables
-
-| Variable | Description | Recommended Setting |
+| Variable | Description | Production Example |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://user:pass@host:5432/dbname` |
-| `SECRET_KEY` | JWT signing secret | 64-character cryptographically random string |
-| `STORAGE_BACKEND` | Storage provider adapter | `s3` (for cloud persistence) or `local` (filesystem volume) |
-| `STORAGE_DIR` | Private filesystem storage path | `/data/vault_storage` (when using persistent disk) |
-| `S3_ENDPOINT_URL` | S3-compatible API endpoint | `https://<ref>.supabase.co/storage/v1/s3` or Cloudflare R2 |
+| `DATABASE_URL` | PostgreSQL 16 connection string | `postgresql+psycopg://user:pass@host:5432/dbname` |
+| `SECRET_KEY` | JWT signing secret key | 64-character cryptographically random hex string |
+| `STORAGE_BACKEND` | Storage adapter backend | `s3` (or `local` for disk volume) |
+| `S3_ENDPOINT_URL` | S3 API endpoint URL | `https://<project-ref>.supabase.co/storage/v1/s3` |
 | `S3_BUCKET_NAME` | Private S3 bucket name | `trustvault-storage` |
-| `S3_ACCESS_KEY_ID` | S3 access key ID | Secret manager / environment variable |
-| `S3_SECRET_ACCESS_KEY` | S3 secret access key | Secret manager / environment variable |
+| `S3_ACCESS_KEY_ID` | S3 access key ID | Configured via secrets manager |
+| `S3_SECRET_ACCESS_KEY`| S3 secret access key | Configured via secrets manager |
 | `S3_REGION_NAME` | S3 bucket region | `us-east-1` |
-| `AI_PROVIDER` | Active AI provider adapter | `mock` (for offline tests) or `gemini` (live Google GenAI) |
-| `AI_MODEL` | Google GenAI model | `gemini-2.5-flash` |
-| `GEMINI_API_KEY` | Google Gemini API key | Stored in backend secrets manager |
-| `ENVIRONMENT` | Operational environment | `production` (enforces strict security constraints) |
-| `DEBUG` | FastAPI debugging flag | `false` |
+| `AI_PROVIDER` | AI provider adapter | `gemini` (live Google GenAI) or `mock` (offline) |
+| `GEMINI_API_KEY` | Google Gemini API Key | Stored in secrets manager |
+| `AI_MODEL` | Gemini LLM model identifier | `gemini-2.5-flash` |
+| `ENVIRONMENT` | Operational environment | `production` |
+| `DEBUG` | FastAPI debug mode | `false` |
 
 ---
 
-## 11. Development Fixtures & Demonstration Script
+## 12. Security Architecture & Threat Model
 
-For the complete 5-minute presentation script and step-by-step judge walkthrough, see [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
-
-### Automated 1-Command Hackathon Demonstration
-
-Run the automated 10-step verification against the live cloud deployment or local staging:
-
-```bash
-# Against Live Deployed API:
-python backend/scripts/demo_hackathon.py --live
-
-# Against Local Staging:
-python backend/scripts/demo_hackathon.py
-```
-
-### Demo Accounts
-
-The database seeder (`backend/seed.py`) configures distinct identities for testing:
-
-| User | Email | Password | Role & Scope |
-| :--- | :--- | :--- | :--- |
-| **Alice** | `owner_a@trustvault.com` | `OwnerAPass123!` | Document Owner (Uploads, grants/revokes access, requests AI) |
-| **Bob** | `owner_b@trustvault.com` | `OwnerBPass123!` | Document Owner (Isolated tenant for cross-user tests) |
-| **Carol** | `viewer_a@trustvault.com` | `ViewerAPass123!` | Restricted Viewer (Read-only access when granted) |
-| **Admin** | `admin@trustvault.com` | `AdminPass123!` | Security Administrator (Ledger verification, role management) |
-
-### 5-Minute Evaluation Walkthrough
-
-1. **Sign In as Owner A:** Navigate to `http://localhost:5173/login`, click **Alice (Document Owner A)**, and sign in.
-2. **Upload Confidential Document:** Click **Upload Document**, attach a sample PDF/TXT file, label it `Q4 Strategic Planning`, category `Executive`, and submit. Note the calculated SHA-256 checksum.
-3. **Grant Explicit Access:** Open the document, navigate to **Sharing & Permissions**, select **Carol Viewer (`viewer_a@trustvault.com`)**, assign `Read Only`, and submit.
-4. **Verify Access as Viewer:** Sign out, log in as **Carol**, verify the document appears in the repository, and click **Download** to stream the file. Notice edit and delete operations are restricted.
-5. **Immediate Revocation:** Sign back in as **Alice**, click **Revoke Access** on Carol's permission. Log back in as **Carol**; the document is immediately removed from the repository, and direct requests to `/download` return `404 Not Found`.
-6. **AI Advisory Recommendation:** Sign in as **Alice**, open a document, go to **AI Access Recommendations**, and click **Request AI Recommendations**. Verify that suggestions remain pending with **zero permissions granted** until Alice explicitly clicks **Approve & Grant Access**.
-7. **Verify Cryptographic Ledger:** Navigate to **Audit Trail** and click **Verify Ledger Integrity**. The system recalculates all SHA-256 hash chains and confirms integrity.
-
----
-
-## 12. Threat Model & Accepted Limitations
-
-For the complete threat analysis, see [`THREATS.md`](THREATS.md).
-
-### Known Architectural Limitations & Accepted Risks
-
-1. **Database-Only Hash Chain:** The cryptographic hash chain detects unauthorized deletion or tampering of audit records by application users and compromised accounts. However, a database superuser with root write access could theoretically rewrite the table and recompute hashes. In high-assurance production environments, periodic signed checkpoints must be pushed to an external, write-once audit destination (e.g., AWS S3 Object Lock or an append-only transparency log).
-2. **Antivirus Scanning:** Magic-byte inspection and extension allowlists are enforced; however, binary malware scanning (e.g. ClamAV) must be incorporated into the upload pipeline prior to public production deployment.
-3. **Legal Review:** The Privacy Policy ([`/privacy`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/frontend/src/routes/PrivacyPage.tsx)) and Terms and Conditions ([`/terms`](file:///c:/Users/chint/OneDrive/Desktop/Trust_val/frontend/src/routes/TermsPage.tsx)) are functional architectural drafts reflecting actual platform mechanics and require legal counsel sign-off before commercial release.
-
----
-
-## 13. Engineering Transparency & Prompts Log
-
-For a chronological record of architectural design sessions, security decisions, bug investigations, and human corrections, refer to [`PROMPTS.md`](PROMPTS.md).
+For comprehensive security analysis, threat modeling, and audit documentation, refer to:
+- [**Threat Model & Invariant Analysis (THREATS.md)**](THREATS.md)
+- [**Requirements Traceability Matrix (REQUIREMENTS_TRACEABILITY.md)**](REQUIREMENTS_TRACEABILITY.md)
+- [**Security Audit & Remediation Log (SECURITY_REMEDIATION.md)**](SECURITY_REMEDIATION.md)
+- [**Incident Response & Runbooks (docs/RUNBOOKS.md)**](docs/RUNBOOKS.md)
 
 ---
 
