@@ -403,9 +403,12 @@ export const AdminPage: React.FC = () => {
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--graphite)', marginBottom: '0.5rem' }}>
             Access Restricted
           </h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
             Administrative privilege required to view the security operations console.
           </p>
+          <Link to="/documents" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            Go to Documents Dashboard
+          </Link>
         </div>
       </div>
     );

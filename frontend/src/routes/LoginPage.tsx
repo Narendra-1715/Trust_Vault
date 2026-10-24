@@ -51,9 +51,13 @@ export const LoginPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
+      const loggedUser = await login(email, password);
       toast.success('Signed in successfully.');
-      navigate(redirectUrl);
+      let target = redirectUrl;
+      if (target.startsWith('/admin') && loggedUser?.role !== 'admin') {
+        target = '/documents';
+      }
+      navigate(target);
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
       toast.error(err.message || 'Authentication failed');
