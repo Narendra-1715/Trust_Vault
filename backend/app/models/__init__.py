@@ -11,6 +11,7 @@ from app.models.request_link import DocumentRequestLink
 from app.models.security_alert import SecurityAlert
 
 from app.models.document_version import DocumentVersion
+from app.models.document_key import DocumentKey
 from app.models.security_policy import SecurityPolicy
 from app.models.access_review import AccessReview
 from app.models.emergency_access import EmergencyAccess
@@ -20,6 +21,7 @@ __all__ = [
     "Base",
     "User",
     "Document",
+    "DocumentKey",
     "DocumentVersion",
     "SecurityPolicy",
     "AccessReview",

@@ -926,6 +926,22 @@
       "purl": "pkg:pypi/websockets@16.1.1",
       "type": "library",
       "version": "16.1.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/pillow@13.0.0",
+      "description": "Pillow imaging library",
+      "name": "pillow",
+      "purl": "pkg:pypi/pillow@13.0.0",
+      "type": "library",
+      "version": "13.0.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pypdfium2@5.14.0",
+      "description": "PDFium Python bindings",
+      "name": "pypdfium2",
+      "purl": "pkg:pypi/pypdfium2@5.14.0",
+      "type": "library",
+      "version": "5.14.0"
     }
   ],
   "dependencies": [

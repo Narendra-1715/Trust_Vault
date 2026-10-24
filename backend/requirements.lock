@@ -174,3 +174,7 @@ uvicorn==0.54.0
     # via -r backend/requirements.txt
 websockets==16.1.1
     # via google-genai
+pillow==13.0.0
+    # via -r backend/requirements.txt
+pypdfium2==5.14.0
+    # via -r backend/requirements.txt
