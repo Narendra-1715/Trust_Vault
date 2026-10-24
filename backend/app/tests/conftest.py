@@ -6,6 +6,7 @@ from typing import Generator
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from hypothesis import settings as hyp_settings, Verbosity, HealthCheck
 
 from app.main import app
 from app.core.config import settings
@@ -14,6 +15,12 @@ from app.core.security import hash_password
 from app.core.rate_limit import login_limiter, upload_limiter, ai_limiter
 from app.models.user import User
 from app.storage.local import LocalPrivateStorage, storage_service
+
+# Register Hypothesis profiles for property-based security testing
+hyp_settings.register_profile("ci", max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+hyp_settings.register_profile("dev", max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+hyp_settings.register_profile("debug", max_examples=10, verbosity=Verbosity.verbose, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+hyp_settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "dev"))
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiters():
@@ -31,30 +38,48 @@ def test_temp_dir():
 
 @pytest.fixture(scope="function")
 def test_db_session(test_temp_dir):
-    """Creates isolated test database per test function."""
-    db_file = os.path.join(test_temp_dir, f"test_{os.urandom(4).hex()}.db")
-    engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
-    
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    """
+    Creates isolated test database per test function.
+    Uses PostgreSQL container if TEST_DATABASE_URL is provided,
+    otherwise creates a temporary isolated SQLite database.
+    """
+    pg_url = os.getenv("TEST_DATABASE_URL")
+    if pg_url:
+        engine = create_engine(pg_url, pool_pre_ping=True)
+        Base.metadata.create_all(bind=engine)
+        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        session = TestingSessionLocal()
+        try:
+            yield session
+        finally:
+            session.rollback()
+            session.close()
+            Base.metadata.drop_all(bind=engine)
+            engine.dispose()
+    else:
+        db_file = os.path.join(test_temp_dir, f"test_{os.urandom(4).hex()}.db")
+        engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+        
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
+        TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        Base.metadata.create_all(bind=engine)
 
-    session = TestingSessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
-        if os.path.exists(db_file):
-            try:
-                os.remove(db_file)
-            except OSError:
-                pass
+        session = TestingSessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+            Base.metadata.drop_all(bind=engine)
+            if os.path.exists(db_file):
+                try:
+                    os.remove(db_file)
+                except OSError:
+                    pass
 
 @pytest.fixture(scope="function")
 def test_storage(test_temp_dir):

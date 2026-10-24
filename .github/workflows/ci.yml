@@ -8,8 +8,32 @@ on:
 
 jobs:
   backend-tests:
-    name: Backend Migrations & Security Tests
+    name: Backend Migrations, PostgreSQL 16 & Security Tests
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trustvault_test
+          POSTGRES_PASSWORD: trustvault_test_password
+          POSTGRES_DB: trustvault_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://trustvault_test:trustvault_test_password@localhost:5432/trustvault_test_db
+      TEST_DATABASE_URL: postgresql+psycopg://trustvault_test:trustvault_test_password@localhost:5432/trustvault_test_db
+      SECRET_KEY: ci_workflow_super_secret_key_for_testing_2026
+      STORAGE_DIR: /tmp/trustvault_ci_storage
+      AI_PROVIDER: mock
+      ENVIRONMENT: testing
+      HYPOTHESIS_PROFILE: ci
 
     steps:
       - uses: actions/checkout@v4
@@ -25,23 +49,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Run database migrations
+      - name: Run database migrations against PostgreSQL 16
         run: |
           cd backend
           alembic upgrade head
 
-      - name: Run seed verification
+      - name: Run seed verification against PostgreSQL 16
         run: |
           cd backend
           python seed.py
 
-      - name: Run automated test suite
+      - name: Run automated test suite with Hypothesis & PostgreSQL
         run: |
           cd backend
-          pytest -v
+          pytest -v --tb=short
 
   frontend-check:
-    name: Frontend Typecheck & Build
+    name: Frontend Typecheck, Lint & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -58,6 +82,11 @@ jobs:
         run: |
           cd frontend
           npm ci
+
+      - name: Run linter
+        run: |
+          cd frontend
+          npm run lint
 
       - name: Typecheck and build
         run: |
