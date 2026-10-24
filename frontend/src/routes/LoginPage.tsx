@@ -43,6 +43,8 @@ export const LoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const isExpired = searchParams.get('expired') === 'true';
 
+  const redirectUrl = searchParams.get('redirect') || '/documents';
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -51,7 +53,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       toast.success('Signed in successfully.');
-      navigate('/documents');
+      navigate(redirectUrl);
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
       toast.error(err.message || 'Authentication failed');
@@ -73,7 +75,7 @@ export const LoginPage: React.FC = () => {
     try {
       await register(regEmail, regPassword, regName, regRole);
       toast.success(`Account created for ${regName}! Signed into workspace.`);
-      navigate('/documents');
+      navigate(redirectUrl);
     } catch (err: any) {
       setError(err.message || 'Registration failed. User may already exist.');
       toast.error(err.message || 'Registration failed');

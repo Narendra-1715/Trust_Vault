@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -17,14 +17,17 @@ import {
   Copy,
   CheckCircle,
   Clock,
-  FileCode
+  FileCode,
+  Link2,
+  Plus,
+  Ban
 } from 'lucide-react';
 import { api, clearAuthToken } from '../lib/api';
 import { formatToIST } from '../lib/date';
 import { useAuth } from '../features/auth/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ConfirmModal } from '../features/common/ConfirmModal';
-import type { SuggestedGrant } from '../types';
+import type { SuggestedGrant, RequestLinkListItem, RequestLinkCreatedResponse } from '../types';
 
 export const DocumentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +36,7 @@ export const DocumentDetailPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'permissions' | 'ai' | 'audit'>('permissions');
+  const [activeTab, setActiveTab] = useState<'permissions' | 'ai' | 'audit' | 'links'>('permissions');
   const [isEditingMeta, setIsEditingMeta] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
@@ -83,6 +86,17 @@ export const DocumentDetailPage: React.FC = () => {
   const [rawTextCache, setRawTextCache] = useState<string | null>(null);
   const [previewRawMode, setPreviewRawMode] = useState(false);
 
+  const handleClosePreview = useCallback(() => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+    }
+    setIsPreviewOpen(false);
+    setPreviewBlobUrl(null);
+    setPreviewText(null);
+    setRawTextCache(null);
+    setPreviewRawMode(false);
+  }, [previewBlobUrl]);
+
   // Queries - Actively re-verifies server authorization & session validity every 6s
   const { data: doc, isLoading: isDocLoading, error: docError } = useQuery({
     queryKey: ['document', id],
@@ -124,10 +138,91 @@ export const DocumentDetailPage: React.FC = () => {
         }
       }
     }
-  }, [docError]);
+  }, [docError, handleClosePreview]);
 
   const isOwner = doc?.owner_id === user?.id;
   const canEdit = isOwner || doc?.effective_permission === 'edit';
+
+  // Request Link State (Owner only)
+  const [newLinkName, setNewLinkName] = useState('');
+  const [newLinkDuration, setNewLinkDuration] = useState<'1h' | '24h' | '7d' | '30d' | 'never' | 'custom'>('7d');
+  const [newLinkCustomExpiry, setNewLinkCustomExpiry] = useState('');
+  const [newLinkMaxUses, setNewLinkMaxUses] = useState<string>('');
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [createdLinkInfo, setCreatedLinkInfo] = useState<RequestLinkCreatedResponse | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const { data: requestLinks, refetch: refetchRequestLinks } = useQuery<RequestLinkListItem[]>({
+    queryKey: ['document-request-links', id],
+    queryFn: () => api.getDocumentRequestLinks(id!),
+    enabled: !!id && isOwner,
+  });
+
+  const handleCreateRequestLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!doc) return;
+    setIsCreatingLink(true);
+    try {
+      let finalExpiry: string | undefined = undefined;
+      const now = new Date();
+      if (newLinkDuration === '1h') finalExpiry = new Date(now.getTime() + 3600 * 1000).toISOString();
+      else if (newLinkDuration === '24h') finalExpiry = new Date(now.getTime() + 24 * 3600 * 1000).toISOString();
+      else if (newLinkDuration === '7d') finalExpiry = new Date(now.getTime() + 7 * 86400 * 1000).toISOString();
+      else if (newLinkDuration === '30d') finalExpiry = new Date(now.getTime() + 30 * 86400 * 1000).toISOString();
+      else if (newLinkDuration === 'custom' && newLinkCustomExpiry) finalExpiry = new Date(newLinkCustomExpiry).toISOString();
+
+      const maxUsesNum = newLinkMaxUses ? parseInt(newLinkMaxUses, 10) : undefined;
+
+      const res = await api.createDocumentRequestLink(doc.id, {
+        name: newLinkName.trim() || undefined,
+        expires_at: finalExpiry,
+        max_uses: maxUsesNum && !isNaN(maxUsesNum) ? maxUsesNum : undefined,
+      });
+
+      setCreatedLinkInfo(res);
+      setNewLinkName('');
+      setNewLinkDuration('7d');
+      setNewLinkCustomExpiry('');
+      setNewLinkMaxUses('');
+      refetchRequestLinks();
+      toast.success('Secure request link generated successfully.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create request link');
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+
+  const handleRevokeRequestLink = (linkId: string, prefix: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Revoke Request Link',
+      message: `Are you sure you want to revoke request link ref_${prefix}? Any user who tries to use this link in the future will be denied.`,
+      confirmLabel: 'Revoke Link',
+      variant: 'danger',
+      isLoading: false,
+      action: async () => {
+        setConfirmConfig(prev => ({ ...prev, isLoading: true }));
+        try {
+          await api.revokeDocumentRequestLink(linkId);
+          refetchRequestLinks();
+          toast.success('Request link revoked successfully.');
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to revoke link');
+        } finally {
+          setConfirmConfig(prev => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      }
+    });
+  };
+
+  const handleCopyGeneratedLink = (token: string) => {
+    const fullUrl = `${window.location.origin}/request-access/${token}`;
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedLink(true);
+    toast.info('Request link copied to clipboard.');
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
 
   const handleCopyChecksum = () => {
     if (doc?.checksum) {
@@ -184,17 +279,6 @@ export const DocumentDetailPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
       queryClient.invalidateQueries({ queryKey: ['auditEvents'] });
     }
-  };
-
-  const handleClosePreview = () => {
-    if (previewBlobUrl) {
-      URL.revokeObjectURL(previewBlobUrl);
-    }
-    setIsPreviewOpen(false);
-    setPreviewBlobUrl(null);
-    setPreviewText(null);
-    setRawTextCache(null);
-    setPreviewRawMode(false);
   };
 
   // Handle Download
@@ -502,6 +586,20 @@ export const DocumentDetailPage: React.FC = () => {
             )}
 
             {isOwner && (
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setActiveTab('links');
+                  window.scrollTo({ top: 400, behavior: 'smooth' });
+                }}
+                title="Create or manage secure request links"
+              >
+                <Link2 size={15} color="var(--copper-dark)" />
+                <span>Share Request Link</span>
+              </button>
+            )}
+
+            {isOwner && (
               <button className="btn btn-danger" onClick={handleDelete}>
                 <Trash2 size={15} />
                 <span>Delete</span>
@@ -654,6 +752,28 @@ export const DocumentDetailPage: React.FC = () => {
           <History size={15} color={activeTab === 'audit' ? 'var(--copper-dark)' : 'currentColor'} />
           <span>Document Activity Log</span>
         </button>
+
+        {isOwner && (
+          <button
+            className="btn btn-sm"
+            onClick={() => setActiveTab('links')}
+            style={{
+              borderBottom: activeTab === 'links' ? '2px solid var(--copper)' : '2px solid transparent',
+              borderRadius: '0',
+              padding: '0.625rem 1rem',
+              fontWeight: activeTab === 'links' ? 600 : 500,
+              color: activeTab === 'links' ? 'var(--graphite)' : 'var(--text-secondary)',
+              backgroundColor: activeTab === 'links' ? 'rgba(217, 154, 103, 0.08)' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Link2 size={15} color={activeTab === 'links' ? 'var(--copper-dark)' : 'currentColor'} />
+            <span>Request Links ({requestLinks?.filter(l => l.is_active).length || 0})</span>
+          </button>
+        )}
       </div>
 
       {/* ================= TAB 1: PERMISSIONS & SHARING ================= */}
@@ -1022,6 +1142,281 @@ export const DocumentDetailPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ================= TAB 4: REQUEST LINKS ================= */}
+      {activeTab === 'links' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Newly Created Link Alert Banner */}
+          {createdLinkInfo && (
+            <div style={{
+              backgroundColor: 'rgba(217, 154, 103, 0.08)',
+              border: '1px solid var(--copper)',
+              borderRadius: '0.5rem',
+              padding: '1.25rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle size={18} color="var(--copper-dark)" />
+                  <span style={{ fontWeight: 600, color: 'var(--graphite)', fontSize: '0.9375rem' }}>
+                    Request Link Generated Successfully
+                  </span>
+                </div>
+                <button
+                  onClick={() => setCreatedLinkInfo(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', lineHeight: 1.45 }}>
+                Share this secure reference URL with users who need to request access to <strong>"{createdLinkInfo.document_title}"</strong>. For zero-trust security, the raw token is shown only once and cannot be retrieved later.
+              </p>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid var(--border)',
+                borderRadius: '0.375rem',
+                padding: '0.5rem 0.75rem',
+              }}>
+                <span style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.8125rem',
+                  color: 'var(--text-primary)',
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {`${window.location.origin}/request-access/${createdLinkInfo.token}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyGeneratedLink(createdLinkInfo.token)}
+                  className="btn btn-sm btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexShrink: 0 }}
+                >
+                  {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+                  <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Create Request Link Form Panel */}
+          <div className="panel" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <Link2 size={16} color="var(--copper-dark)" />
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                Generate Secure Request Link
+              </h3>
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.45 }}>
+              Create an unpredictable, revocable access reference. Authenticated recipients can view basic metadata and submit an access request without gaining direct document access.
+            </p>
+
+            <form onSubmit={handleCreateRequestLink} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
+                    Link Label / Context (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g., Q3 Auditor Review, Engineering Onboarding"
+                    value={newLinkName}
+                    onChange={(e) => setNewLinkName(e.target.value)}
+                    maxLength={100}
+                    style={{ fontSize: '0.8125rem' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
+                    Max Submissions / Uses (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    className="form-input"
+                    placeholder="Leave empty for unlimited uses"
+                    value={newLinkMaxUses}
+                    onChange={(e) => setNewLinkMaxUses(e.target.value)}
+                    style={{ fontSize: '0.8125rem' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
+                  Link Expiration Policy
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.5rem' }}>
+                  {(['1h', '24h', '7d', '30d', 'never', 'custom'] as const).map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewLinkDuration(preset)}
+                      className="btn btn-sm"
+                      style={{
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.75rem',
+                        backgroundColor: newLinkDuration === preset ? 'var(--graphite)' : 'var(--bg-warm)',
+                        color: newLinkDuration === preset ? '#FFFFFF' : 'var(--text-secondary)',
+                        borderColor: newLinkDuration === preset ? 'var(--graphite)' : 'var(--border)',
+                      }}
+                    >
+                      {preset === '1h' ? '1 Hour' : preset === '24h' ? '24 Hours' : preset === '7d' ? '7 Days' : preset === '30d' ? '30 Days' : preset === 'never' ? 'Permanent' : 'Custom'}
+                    </button>
+                  ))}
+                </div>
+
+                {newLinkDuration === 'custom' && (
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={newLinkCustomExpiry}
+                    onChange={(e) => setNewLinkCustomExpiry(e.target.value)}
+                    style={{ fontSize: '0.8125rem', maxWidth: '300px' }}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={isCreatingLink}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}
+                >
+                  <Plus size={14} />
+                  <span>{isCreatingLink ? 'Generating...' : 'Generate Request Link'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* List of Existing Request Links */}
+          <div className="panel" style={{ padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                  Active &amp; Historical Request Links
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Manage valid tokens and immediately revoke references as needed.
+                </span>
+              </div>
+              <span className="badge badge-gray">
+                {requestLinks?.length || 0} Total
+              </span>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--bg-warm)', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>Label / Reference</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Uses / Cap</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Expires</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody style={{ fontSize: '0.8125rem' }}>
+                  {requestLinks && requestLinks.length > 0 ? (
+                    requestLinks.map(link => {
+                      const isRevoked = Boolean(link.revoked_at);
+                      const isMaxReached = Boolean(link.max_uses && link.use_count >= link.max_uses);
+                      const isInactive = !link.is_active;
+
+                      return (
+                        <tr key={link.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {link.name || 'Unnamed Request Link'}
+                            </div>
+                            <div style={{ fontFamily: 'monospace', fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>
+                              ref_{link.token_prefix}...
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                              {link.use_count}
+                            </span>
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                              {link.max_uses ? ` / ${link.max_uses}` : ' (unlimited)'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {link.expires_at ? formatToIST(link.expires_at) : 'Never (Permanent)'}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            {isRevoked ? (
+                              <span className="badge badge-red" style={{ fontSize: '0.6875rem' }}>
+                                Revoked
+                              </span>
+                            ) : isMaxReached ? (
+                              <span className="badge badge-yellow" style={{ fontSize: '0.6875rem' }}>
+                                Limit Reached
+                              </span>
+                            ) : isInactive ? (
+                              <span className="badge badge-gray" style={{ fontSize: '0.6875rem' }}>
+                                Expired
+                              </span>
+                            ) : (
+                              <span className="badge badge-green" style={{ fontSize: '0.6875rem' }}>
+                                Active
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                            {link.is_active ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRevokeRequestLink(link.id, link.token_prefix)}
+                                className="btn btn-sm"
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  fontSize: '0.6875rem',
+                                  color: '#DC2626',
+                                  backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                                  borderColor: 'rgba(220, 38, 38, 0.2)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                              >
+                                <Ban size={12} />
+                                <span>Revoke</span>
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                —
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                        No request links generated for this document yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

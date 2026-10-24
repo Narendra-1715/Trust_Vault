@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../features/auth/AuthContext';
-import { Shield, FileText, Activity, Users, LogOut, Lock, Laptop } from 'lucide-react';
+import { Shield, FileText, Activity, Users, LogOut, Lock, Laptop, KeyRound } from 'lucide-react';
 import { SessionManagementModal } from '../features/auth/SessionManagementModal';
 import { NotificationBell } from '../features/notifications/NotificationBell';
+import { api } from '../lib/api';
 
 export const AppLayout: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
+
+  const { data: pendingRequests } = useQuery({
+    queryKey: ['incomingRequests', 'pending'],
+    queryFn: () => api.getIncomingAccessRequests('pending'),
+    enabled: isAuthenticated,
+    refetchInterval: 15000,
+  });
+  const pendingCount = pendingRequests?.length || 0;
 
   const handleSignOut = () => {
     logout();
@@ -110,6 +120,39 @@ export const AppLayout: React.FC = () => {
                 >
                   <FileText size={15} color={isActive('/documents') ? 'var(--copper-dark)' : 'currentColor'} />
                   <span>Documents</span>
+                </Link>
+
+                <Link
+                  to="/requests"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                    padding: '0.375rem 0.75rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: isActive('/requests') ? 600 : 500,
+                    color: isActive('/requests') ? 'var(--graphite)' : 'var(--text-secondary)',
+                    backgroundColor: isActive('/requests') ? 'var(--copper-light)' : 'transparent',
+                    border: `1px solid ${isActive('/requests') ? 'var(--copper-border)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <KeyRound size={15} color={isActive('/requests') ? 'var(--copper-dark)' : 'currentColor'} />
+                  <span>Requests</span>
+                  {pendingCount > 0 && (
+                    <span style={{
+                      backgroundColor: 'var(--copper)',
+                      color: '#FFFFFF',
+                      fontSize: '0.625rem',
+                      fontWeight: 700,
+                      padding: '0.0625rem 0.375rem',
+                      borderRadius: '10px',
+                      lineHeight: 1.3,
+                    }}>
+                      {pendingCount}
+                    </span>
+                  )}
                 </Link>
 
                 <Link

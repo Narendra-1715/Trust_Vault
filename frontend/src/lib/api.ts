@@ -7,7 +7,17 @@ import type {
   AuditVerificationReport,
   AIRecommendationResult,
   UserSession,
-  SecurityAlert
+  SecurityAlert,
+  AccessRequest,
+  AccessRequestCreate,
+  AccessRequestApprove,
+  AccessRequestReject,
+  AccessRequestStatusCheck,
+  RequestLinkCreate,
+  RequestLinkCreatedResponse,
+  RequestLinkListItem,
+  RequestLinkResolved,
+  RequestLinkSubmit
 } from '../types';
 
 // Dynamically resolve API URL with automated protocol & domain handling for cloud hosting (Render/Vercel)
@@ -362,6 +372,65 @@ export const api = {
 
   rejectAIRecommendations: (documentId: string, data: { suggestion_id: string; rejection_reason?: string }) =>
     request<{ status: string; suggestion_id: string }>(`/documents/${documentId}/ai-recommendations/reject`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Secure Document Access Request Workflow
+  createAccessRequest: (data: AccessRequestCreate) =>
+    request<AccessRequest>('/access-requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getMyAccessRequests: () =>
+    request<AccessRequest[]>('/access-requests/my'),
+
+  getIncomingAccessRequests: (statusFilter?: string) =>
+    request<AccessRequest[]>(statusFilter ? `/access-requests/incoming?status_filter=${statusFilter}` : '/access-requests/incoming'),
+
+  getAccessRequestStatus: (documentId: string) =>
+    request<AccessRequestStatusCheck>(`/access-requests/status/${documentId}`),
+
+  getAccessRequestDetails: (requestId: string) =>
+    request<AccessRequest>(`/access-requests/${requestId}`),
+
+  approveAccessRequest: (requestId: string, data: AccessRequestApprove) =>
+    request<AccessRequest>(`/access-requests/${requestId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  rejectAccessRequest: (requestId: string, data: AccessRequestReject) =>
+    request<AccessRequest>(`/access-requests/${requestId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  cancelAccessRequest: (requestId: string) =>
+    request<AccessRequest>(`/access-requests/${requestId}/cancel`, {
+      method: 'POST',
+    }),
+
+  createDocumentRequestLink: (documentId: string, data: RequestLinkCreate) =>
+    request<RequestLinkCreatedResponse>(`/access-requests/links/${documentId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getDocumentRequestLinks: (documentId: string) =>
+    request<RequestLinkListItem[]>(`/access-requests/links/${documentId}`),
+
+  revokeDocumentRequestLink: (linkId: string) =>
+    request<{ message: string }>(`/access-requests/links/${linkId}/revoke`, {
+      method: 'POST',
+    }),
+
+  resolveRequestLink: (token: string) =>
+    request<RequestLinkResolved>(`/access-requests/resolve-link/${token}`),
+
+  submitAccessRequestViaLink: (token: string, data: RequestLinkSubmit) =>
+    request<AccessRequest>(`/access-requests/submit-via-link/${token}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

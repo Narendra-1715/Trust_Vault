@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './features/auth/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -10,6 +10,8 @@ import { DocumentsPage } from './routes/DocumentsPage';
 import { DocumentDetailPage } from './routes/DocumentDetailPage';
 import { AuditPage } from './routes/AuditPage';
 import { AdminPage } from './routes/AdminPage';
+import { RequestsPage } from './routes/RequestsPage';
+import { RequestAccessLandingPage } from './routes/RequestAccessLandingPage';
 import { PrivacyPage } from './routes/PrivacyPage';
 import { TermsPage } from './routes/TermsPage';
 import { NotFoundPage } from './routes/NotFoundPage';
@@ -25,13 +27,14 @@ const queryClient = new QueryClient({
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <div style={{ padding: '4rem', textAlign: 'center' }}>Authenticating session...</div>;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
   return <>{children}</>;
@@ -64,6 +67,18 @@ export const App: React.FC = () => {
                 <Route path="audit" element={
                   <ProtectedRoute>
                     <AuditPage />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="requests" element={
+                  <ProtectedRoute>
+                    <RequestsPage />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="request-access/:token" element={
+                  <ProtectedRoute>
+                    <RequestAccessLandingPage />
                   </ProtectedRoute>
                 } />
 

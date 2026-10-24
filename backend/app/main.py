@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, documents, permissions, audit, ai, health, notifications
+from app.api.v1 import auth, users, documents, permissions, audit, ai, health, notifications, access_requests
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -43,6 +43,7 @@ app.include_router(users.router, prefix=f"{api_v1}/users", tags=["Users & Admini
 app.include_router(documents.router, prefix=f"{api_v1}/documents", tags=["Documents"])
 app.include_router(permissions.router, prefix=f"{api_v1}", tags=["Permissions"])
 app.include_router(notifications.router, prefix=f"{api_v1}/notifications", tags=["Security Alerts"])
+app.include_router(access_requests.router, prefix=f"{api_v1}/access-requests", tags=["Access Requests"])
 app.include_router(ai.router, prefix=f"{api_v1}", tags=["AI Access Recommendations"])
 app.include_router(audit.router, prefix=f"{api_v1}/audit", tags=["Audit & Integrity"])
 app.include_router(health.router, prefix=f"{api_v1}", tags=["Health Check"])

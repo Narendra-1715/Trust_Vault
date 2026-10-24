@@ -6,6 +6,8 @@ from app.models.audit import AuditEvent
 from app.models.ai_suggestion import AIAccessSuggestion
 from app.models.session import UserSession
 from app.models.notification import SecurityNotification
+from app.models.access_request import AccessRequest
+from app.models.request_link import DocumentRequestLink
 
 __all__ = [
     "Base",
@@ -15,5 +17,7 @@ __all__ = [
     "AuditEvent",
     "AIAccessSuggestion",
     "UserSession",
-    "SecurityNotification"
+    "SecurityNotification",
+    "AccessRequest",
+    "DocumentRequestLink"
 ]

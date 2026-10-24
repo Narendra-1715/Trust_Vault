@@ -122,3 +122,105 @@ export interface SecurityAlert {
   read_at?: string;
   is_read: boolean;
 }
+
+export interface AccessRequest {
+  id: string;
+  document_id: string;
+  document_title?: string;
+  requester_id: string;
+  requester_email?: string;
+  requester_name?: string;
+  owner_id: string;
+  owner_email?: string;
+  owner_name?: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+  requested_permission: 'read' | 'edit';
+  requested_expiry?: string;
+  approved_permission?: 'read' | 'edit';
+  approved_expiry?: string;
+  rejection_reason?: string;
+  decided_by?: string;
+  decided_by_name?: string;
+  decided_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessRequestCreate {
+  document_id: string;
+  reason: string;
+  requested_permission?: 'read' | 'edit';
+  requested_expiry?: string;
+}
+
+export interface AccessRequestApprove {
+  approved_permission: 'read' | 'edit';
+  approved_expiry?: string;
+}
+
+export interface AccessRequestReject {
+  rejection_reason?: string;
+}
+
+export interface AccessRequestStatusCheck {
+  has_pending_request: boolean;
+  request_id?: string;
+  created_at?: string;
+  requested_permission?: string;
+  requested_expiry?: string;
+}
+
+export interface RequestLinkCreate {
+  name?: string;
+  expires_at?: string;
+  max_uses?: number;
+}
+
+export interface RequestLinkCreatedResponse {
+  id: string;
+  document_id: string;
+  document_title: string;
+  token: string;
+  token_prefix: string;
+  name?: string;
+  expires_at?: string;
+  max_uses?: number;
+  use_count: number;
+  created_at: string;
+}
+
+export interface RequestLinkListItem {
+  id: string;
+  document_id: string;
+  token_prefix: string;
+  name?: string;
+  expires_at?: string;
+  max_uses?: number;
+  use_count: number;
+  revoked_at?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface RequestLinkResolved {
+  link_id: string;
+  token_prefix: string;
+  document_id: string;
+  document_title: string;
+  category?: string;
+  owner_id: string;
+  owner_name: string;
+  owner_email: string;
+  is_valid: boolean;
+  already_has_access: boolean;
+  has_pending_request: boolean;
+  pending_request_id?: string;
+}
+
+export interface RequestLinkSubmit {
+  reason: string;
+  requested_permission?: 'read' | 'edit';
+  requested_expiry?: string;
+}
