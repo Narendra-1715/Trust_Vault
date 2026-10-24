@@ -33,6 +33,21 @@ app = FastAPI(
 async def document_not_found_handler(request: Request, exc: DocumentNotFoundException):
     return not_found_response()
 
+# Global Unhandled Exception Handler (ensures CORS headers and clean JSON on unexpected errors)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    origin = request.headers.get("origin")
+    cors_hdrs = {}
+    if origin and (origin in settings.cors_origins or origin.endswith(".onrender.com")):
+        cors_hdrs["Access-Control-Allow-Origin"] = origin
+        cors_hdrs["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "An internal server error occurred."},
+        headers=cors_hdrs
+    )
+
 # Phase 9: Request Body Size Enforcement ASGI Middleware
 # Hard cap 50 MB for file uploads, 1 MB for JSON API payloads.
 # Rejects oversized payloads BEFORE buffering to disk or memory.
