@@ -46,6 +46,7 @@ def test_db_session(test_temp_dir):
     """
     pg_url = os.getenv("TEST_DATABASE_URL")
     if pg_url:
+        from sqlalchemy import text
         engine = create_engine(pg_url, pool_pre_ping=True)
         Base.metadata.create_all(bind=engine)
         TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -55,7 +56,11 @@ def test_db_session(test_temp_dir):
         finally:
             session.rollback()
             session.close()
-            Base.metadata.drop_all(bind=engine)
+            with engine.connect() as conn:
+                conn.execute(text("DROP VIEW IF EXISTS ai_document_metadata_view CASCADE;"))
+                for table in reversed(Base.metadata.sorted_tables):
+                    conn.execute(text(f'DROP TABLE IF EXISTS "{table.name}" CASCADE;'))
+                conn.commit()
             engine.dispose()
     else:
         db_file = os.path.join(test_temp_dir, f"test_{os.urandom(4).hex()}.db")
