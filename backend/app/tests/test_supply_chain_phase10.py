@@ -10,20 +10,26 @@ import sys
 import os
 import json
 import subprocess
+import importlib.util
 from pathlib import Path
 import pytest
 
-# Ensure repository root is on sys.path so scripts can be imported when running from backend directory
+# Dynamically load audit_supply_chain from repository root scripts directory
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_AUDIT_SCRIPT = _REPO_ROOT / "scripts" / "audit_supply_chain.py"
 
-from scripts.audit_supply_chain import (
-    check_backend_pinning,
-    check_frontend_pinning,
-    check_sbom_validity,
-    ROOT_DIR
-)
+if not _AUDIT_SCRIPT.exists():
+    raise FileNotFoundError(f"Supply chain auditor script not found at {_AUDIT_SCRIPT}")
+
+_spec = importlib.util.spec_from_file_location("scripts.audit_supply_chain", str(_AUDIT_SCRIPT))
+_audit_mod = importlib.util.module_from_spec(_spec)
+sys.modules["scripts.audit_supply_chain"] = _audit_mod
+_spec.loader.exec_module(_audit_mod)
+
+check_backend_pinning = _audit_mod.check_backend_pinning
+check_frontend_pinning = _audit_mod.check_frontend_pinning
+check_sbom_validity = _audit_mod.check_sbom_validity
+ROOT_DIR = _audit_mod.ROOT_DIR
 
 
 def test_backend_requirements_pinning_and_no_loose_ranges():

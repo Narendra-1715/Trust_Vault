@@ -125,9 +125,24 @@ def client(test_db_session, test_storage):
     """FastAPI TestClient with overridden get_db dependency."""
     def override_get_db():
         try:
-            yield test_db_session
-        finally:
+            if not test_db_session.is_active:
+                test_db_session.rollback()
+        except Exception:
             pass
+        try:
+            yield test_db_session
+        except Exception:
+            try:
+                test_db_session.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                if not test_db_session.is_active:
+                    test_db_session.rollback()
+            except Exception:
+                pass
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
