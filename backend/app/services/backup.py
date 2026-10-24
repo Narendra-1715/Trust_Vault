@@ -308,6 +308,7 @@ def export_database_records(db: Session) -> Dict[str, Any]:
             "suggested_grants": ai.suggested_grants,
             "explanation": ai.explanation,
             "provider_model": ai.provider_model,
+            "action_type": ai.action_type,
             "status": ai.status,
             "created_at": format_dt(ai.created_at),
             "reviewed_at": format_dt(ai.reviewed_at),

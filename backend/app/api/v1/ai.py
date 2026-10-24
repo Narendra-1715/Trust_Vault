@@ -55,18 +55,35 @@ def request_ai_recommendations(
         for u in candidate_users_db
     ]
 
-    # Generate structured recommendation
-    result: AIRecommendationResult = ai_service.get_recommendations(
-        document_id=doc.id,
-        document_title=doc.title,
-        document_description=doc.description or "",
-        category=doc.category,
-        candidate_users=candidates,
-        owner_email=current_user.email
+    # Generate structured recommendation with egress leak filter inspection
+    from app.ai.egress_filter import AIEgressLeakDetectedException
+
+    try:
+        result: AIRecommendationResult = ai_service.get_recommendations(
+            document_id=doc.id,
+            document_title=doc.title,
+            document_description=doc.description or "",
+            category=doc.category,
+            candidate_users=candidates,
+            owner_email=current_user.email,
+            db=db,
+            actor_id=current_user.id,
+            request_id=request_id
+        )
+    except AIEgressLeakDetectedException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI Egress Security Violation: Outbound data transmission blocked ({str(e)})"
+        )
+
+    # Persist suggestion strictly in pending state (advisory only)
+    suggestion_id = str(uuid.uuid4())
+    primary_action = (
+        result.suggested_actions[0].value
+        if result.suggested_actions
+        else "RECOMMEND_READ_GRANT"
     )
 
-    # Persist suggestion in pending state
-    suggestion_id = str(uuid.uuid4())
     ai_record = AIAccessSuggestion(
         id=suggestion_id,
         document_id=doc.id,
@@ -74,6 +91,7 @@ def request_ai_recommendations(
         suggested_grants=[s.model_dump() for s in result.suggestions],
         explanation=result.explanation,
         provider_model=result.provider_model,
+        action_type=primary_action,
         status="pending",
         created_at=datetime.now(timezone.utc)
     )
@@ -92,6 +110,7 @@ def request_ai_recommendations(
             "document_id": doc.id,
             "provider_model": result.provider_model,
             "is_mock": result.is_mock,
+            "suggested_actions": [a.value for a in result.suggested_actions],
             "suggestion_count": len(result.suggestions)
         }
     )

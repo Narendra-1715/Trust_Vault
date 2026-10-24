@@ -10,9 +10,10 @@ class AIAccessSuggestion(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     requester_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    suggested_grants = Column(JSON, nullable=False)  # List of {user_id, email, permission_level, confidence}
+    suggested_grants = Column(JSON, nullable=False)  # List of {user_id, email, permission_level, confidence, action}
     explanation = Column(Text, nullable=False)
     provider_model = Column(String(100), nullable=False)
+    action_type = Column(String(50), default="RECOMMEND_READ_GRANT", nullable=False)
     status = Column(String(30), default="pending", nullable=False, index=True) # pending, approved, rejected, modified
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     reviewed_at = Column(DateTime, nullable=True)

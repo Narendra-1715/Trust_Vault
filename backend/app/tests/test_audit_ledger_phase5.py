@@ -172,17 +172,18 @@ def test_cli_returns_non_zero_on_corrupt_chains(test_db_session: Session):
             outcome="success"
         )
 
-    # 1. Clean chain -> CLI returns 0
-    exit_code_clean = cli_main(["verify"], db_session=test_db_session)
-    assert exit_code_clean == 0
+    with tempfile.TemporaryDirectory() as empty_cp_dir:
+        # 1. Clean chain -> CLI returns 0
+        exit_code_clean = cli_main(["verify", "--checkpoints-dir", empty_cp_dir], db_session=test_db_session)
+        assert exit_code_clean == 0
 
-    # 2. Tampered record -> CLI returns 1 (non-zero)
-    event_5 = test_db_session.query(AuditEvent).filter(AuditEvent.sequence_number == 5).first()
-    event_5.action = "tampered.action"
-    test_db_session.commit()
+        # 2. Tampered record -> CLI returns 1 (non-zero)
+        event_5 = test_db_session.query(AuditEvent).filter(AuditEvent.sequence_number == 5).first()
+        event_5.action = "tampered.action"
+        test_db_session.commit()
 
-    exit_code_corrupt = cli_main(["verify"], db_session=test_db_session)
-    assert exit_code_corrupt != 0
+        exit_code_corrupt = cli_main(["verify", "--checkpoints-dir", empty_cp_dir], db_session=test_db_session)
+        assert exit_code_corrupt != 0
 
     # Revert record 5
     event_5.action = "auth.logout.4"
