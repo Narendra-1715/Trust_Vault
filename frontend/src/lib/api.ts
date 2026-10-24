@@ -426,12 +426,14 @@ export const api = {
     }),
 
   // Audit
-  listAuditEvents: (params: { document_id?: string; action?: string; outcome?: string; resource_type?: string; page?: number; page_size?: number } = {}) => {
+  listAuditEvents: (params: { document_id?: string; action?: string; outcome?: string; resource_type?: string; date_from?: string; date_to?: string; page?: number; page_size?: number } = {}) => {
     const searchParams = new URLSearchParams();
     if (params.document_id) searchParams.append('document_id', params.document_id);
     if (params.action) searchParams.append('action', params.action);
     if (params.outcome) searchParams.append('outcome', params.outcome);
     if (params.resource_type) searchParams.append('resource_type', params.resource_type);
+    if (params.date_from) searchParams.append('date_from', params.date_from);
+    if (params.date_to) searchParams.append('date_to', params.date_to);
     if (params.page) searchParams.append('page', params.page.toString());
     if (params.page_size) searchParams.append('page_size', params.page_size.toString());
     return request<{ total: number; events: AuditEvent[] }>(`/audit/events?${searchParams.toString()}`);

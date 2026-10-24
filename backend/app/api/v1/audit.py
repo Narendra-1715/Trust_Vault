@@ -55,6 +55,8 @@ def list_audit_events(
     action: Optional[str] = Query(None, description="Filter by action name"),
     outcome: Optional[str] = Query(None, description="Filter by outcome (success, denied, failure)"),
     resource_type: Optional[str] = Query(None, description="Filter by resource type"),
+    date_from: Optional[datetime] = Query(None, description="Events on or after this timestamp"),
+    date_to: Optional[datetime] = Query(None, description="Events on or before this timestamp"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -105,6 +107,10 @@ def list_audit_events(
         filters.append(AuditEvent.outcome == outcome.strip())
     if resource_type:
         filters.append(AuditEvent.resource_type == resource_type.strip())
+    if date_from:
+        filters.append(AuditEvent.timestamp >= date_from)
+    if date_to:
+        filters.append(AuditEvent.timestamp <= date_to)
 
     total = db.query(AuditEvent).filter(*filters).count()
     events = (
