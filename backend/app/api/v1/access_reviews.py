@@ -35,9 +35,7 @@ def list_access_reviews(
     """
     query = db.query(AccessReview)
 
-    if all_org and current_user.role == "admin":
-        pass
-    else:
+    if not (all_org and current_user.role == "admin"):
         query = query.filter(AccessReview.reviewer_id == current_user.id)
 
     if document_id:

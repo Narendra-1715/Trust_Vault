@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.document import Document
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action
 from app.schemas.policy_simulator import PolicySimulationRequest, PolicySimulationResponse, RuleEvaluationResult
 from app.api.deps import get_current_user, get_request_id
 from app.audit.service import log_audit_event
@@ -33,14 +34,9 @@ def simulate_policy_grant(
     """
     request_id = get_request_id(request)
 
-    # 1. Fetch document and enforce authorization
-    doc = db.query(Document).filter(
-        Document.id == sim_in.document_id,
-        Document.deleted_at.is_(None)
-    ).first()
-
-    # If caller cannot read the document, return consistent 404 to prevent enumeration
-    AuthorizationPolicy.require_read(db, current_user, doc)
+    # 1. Fetch document and enforce grant-management authorization via AuthorizationService
+    # Restricts simulation strictly to documents the caller owns or manages (Invariant I3 uniform 404)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, sim_in.document_id, request_id=request_id)
 
     # 2. Resolve target recipient
     target_user = None

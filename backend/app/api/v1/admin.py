@@ -22,6 +22,8 @@ from app.schemas.admin import (
     SystemSettingUpdateRequest,
     SystemStatusResponse
 )
+from app.schemas.document import AdminDocumentMetadataListResponse, AdminDocumentMetadataResponse
+from app.services.authorization import get_admin_metadata_view
 from app.api.deps import get_current_admin, get_request_id
 from app.core.security import verify_password
 from app.core.config import settings
@@ -211,6 +213,23 @@ def update_system_setting(
     )
 
     return setting
+
+@router.get("/documents", response_model=AdminDocumentMetadataListResponse)
+def list_admin_document_inventory(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin)
+):
+    """
+    Administrative document inventory:
+    Strictly enforces Admin Blindness (Invariant I1): filenames, titles, and descriptions are redacted.
+    Admins see only non-sensitive operational fields (UUID, size bucket, status, category, timestamps).
+    """
+    docs = db.query(Document).order_by(Document.created_at.desc()).all()
+    items = [get_admin_metadata_view(d) for d in docs]
+    return AdminDocumentMetadataListResponse(
+        total=len(items),
+        documents=items
+    )
 
 # ================= EMERGENCY ACCESS (BREAK-GLASS) =================
 

@@ -18,12 +18,17 @@ class Document(Base):
     checksum = Column(String(64), nullable=False)  # SHA-256
     category = Column(String(50), nullable=False, default="General", index=True)
     classification = Column(String(50), nullable=False, default="Internal", index=True)
+    permission_epoch = Column(BigInteger, default=1, nullable=False)
+    org_id = Column(String(50), default="default-org", nullable=False, index=True)
+    transferred_at = Column(DateTime, nullable=True)
+    transferred_from_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     deleted_at = Column(DateTime, nullable=True, index=True)
 
     # Relationships
     owner = relationship("User", back_populates="owned_documents", foreign_keys=[owner_id])
+    transferred_from = relationship("User", foreign_keys=[transferred_from_id])
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     ai_suggestions = relationship("AIAccessSuggestion", back_populates="document", cascade="all, delete-orphan")
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="desc(DocumentVersion.version_number)")

@@ -85,6 +85,15 @@ def get_current_user(
     request.state.current_session = current_session
     request.state.current_user = user
 
+    # Set PostgreSQL RLS transaction context
+    if db.bind and db.bind.dialect.name == "postgresql":
+        try:
+            from sqlalchemy import text
+            db.execute(text("SET LOCAL app.current_user_id = :uid"), {"uid": str(user.id)})
+            db.execute(text("SET LOCAL app.current_org_id = :org"), {"org": str(getattr(user, "org_id", "default-org"))})
+        except Exception:
+            pass
+
     return user
 
 def get_current_admin(

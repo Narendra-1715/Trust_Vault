@@ -27,6 +27,7 @@ from app.schemas.request_link import (
 )
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action, raise_not_found
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
 from app.services.detection import detect_invalid_reference_probes, detect_cross_owner_probes
@@ -423,6 +424,9 @@ def approve_access_request(
     access_req.decided_at = now_utc
     access_req.updated_at = now_utc
 
+    # Increment permission epoch to invalidate any active cached streams
+    doc.permission_epoch = (doc.permission_epoch or 1) + 1
+
     # Commit grant and approval atomically
     db.commit()
     db.refresh(access_req)
@@ -650,18 +654,14 @@ def create_document_request_link(
     - Raw token is returned only once to the owner for distribution.
     - The link NEVER confers document content access.
     """
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.deleted_at.is_(None)
-    ).first()
-
-    if doc and doc.owner_id != current_user.id:
-        req_id = get_request_id(request)
+    req_id = get_request_id(request)
+    doc_probe = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
+    if doc_probe and doc_probe.owner_id != current_user.id:
         log_audit_event(
             db=db,
             action="request_link.create",
             resource_type="document",
-            resource_id=doc.id,
+            resource_id=doc_probe.id,
             outcome="denied",
             actor_id=current_user.id,
             request_id=req_id,
@@ -670,11 +670,10 @@ def create_document_request_link(
         detect_cross_owner_probes(
             db=db,
             actor_id=current_user.id,
-            target_document_id=doc.id,
+            target_document_id=doc_probe.id,
             request_id=req_id
         )
-
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=req_id)
 
     now_utc = datetime.now(timezone.utc)
     exp = link_in.expires_at
@@ -748,31 +747,7 @@ def list_document_request_links(
     Only the document owner can inspect links.
     Never exposes raw tokens.
     """
-    doc = db.query(Document).filter(
-        Document.id == document_id,
-        Document.deleted_at.is_(None)
-    ).first()
-
-    if doc and doc.owner_id != current_user.id:
-        req_id = get_request_id(request)
-        log_audit_event(
-            db=db,
-            action="request_link.create",
-            resource_type="document",
-            resource_id=doc.id,
-            outcome="denied",
-            actor_id=current_user.id,
-            request_id=req_id,
-            metadata={"reason": "Unauthorized non-owner link creation probe"}
-        )
-        detect_cross_owner_probes(
-            db=db,
-            actor_id=current_user.id,
-            target_document_id=doc.id,
-            request_id=req_id
-        )
-
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id)
 
     links = db.query(DocumentRequestLink).filter(
         DocumentRequestLink.document_id == document_id

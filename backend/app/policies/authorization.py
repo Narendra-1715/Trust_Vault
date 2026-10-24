@@ -1,15 +1,26 @@
-from typing import Optional, Tuple
+"""Authorization Policy Compatibility Layer
+Delegates all policy checks directly to the central AuthorizationService (PDP).
+Maintained for backwards-compatibility while enforcing Invariants I1-I3 platform-wide.
+"""
+
+from typing import Optional
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+
 from app.models.user import User
 from app.models.document import Document
 from app.models.permission import DocumentPermission
+from app.services.authorization import (
+    AuthorizationService,
+    Action,
+    raise_not_found,
+    is_valid_uuid
+)
 
 class AuthorizationPolicy:
     """
-    Centralized server-side authorization engine.
-    Sole authority for verifying user permissions against current database state.
+    Compatibility wrapper delegating to AuthorizationService.
     """
 
     @staticmethod
@@ -39,86 +50,39 @@ class AuthorizationPolicy:
 
     @classmethod
     def can_read_document(cls, db: Session, user: User, document: Document) -> bool:
-        """
-        Returns True if user is the document owner OR has an active 'read' or 'edit' permission grant.
-        Admins do not automatically have content access unless explicitly granted or holding active emergency break-glass access.
-        """
-        if document.deleted_at is not None:
+        """Evaluates whether user can read/view document."""
+        if not document:
             return False
-            
-        if document.owner_id == user.id:
-            return True
-
-        perm = cls.get_active_permission(db, document.id, user.id)
-        if perm and perm.permission_level in ["read", "edit"]:
-            return True
-
-        # Check emergency break-glass access for administrators
-        if user.role == "admin":
-            from app.models.emergency_access import EmergencyAccess
-            now_utc = datetime.now(timezone.utc)
-            active_emergency = db.query(EmergencyAccess).filter(
-                EmergencyAccess.admin_id == user.id,
-                EmergencyAccess.document_id == document.id,
-                EmergencyAccess.status == "active",
-                EmergencyAccess.revoked_at.is_(None)
-            ).first()
-            if active_emergency:
-                exp = active_emergency.expires_at.replace(tzinfo=timezone.utc) if active_emergency.expires_at.tzinfo is None else active_emergency.expires_at
-                if exp > now_utc:
-                    return True
-                else:
-                    active_emergency.status = "expired"
-                    try:
-                        db.commit()
-                    except Exception:
-                        db.rollback()
-
-        return False
+        decision = AuthorizationService.decide(db, user, Action.VIEW, document.id)
+        return decision.allowed
 
     @classmethod
     def can_edit_document(cls, db: Session, user: User, document: Document) -> bool:
-        """
-        Returns True if user is the document owner OR has active 'edit' permission.
-        Viewers and non-permitted users cannot edit.
-        """
-        if document.deleted_at is not None:
+        """Evaluates whether user can edit document."""
+        if not document:
             return False
-
-        if document.owner_id == user.id:
-            return True
-
-        perm = cls.get_active_permission(db, document.id, user.id)
-        if perm and perm.permission_level == "edit":
-            return True
-
-        return False
+        decision = AuthorizationService.decide(db, user, Action.EDIT, document.id)
+        return decision.allowed
 
     @classmethod
     def can_delete_document(cls, db: Session, user: User, document: Document) -> bool:
-        """
-        Only the document owner can delete their document.
-        Edit permission holders cannot delete.
-        """
-        if document.deleted_at is not None:
+        """Evaluates whether user can delete document."""
+        if not document:
             return False
-        return document.owner_id == user.id
+        decision = AuthorizationService.decide(db, user, Action.DELETE, document.id)
+        return decision.allowed
 
     @classmethod
     def can_manage_permissions(cls, db: Session, user: User, document: Document) -> bool:
-        """
-        Only the document owner can grant or revoke permissions or request AI sharing recommendations.
-        Viewers and editors cannot grant permissions to others.
-        """
-        if document.deleted_at is not None:
+        """Evaluates whether user can manage permissions."""
+        if not document:
             return False
-        return document.owner_id == user.id
+        decision = AuthorizationService.decide(db, user, Action.MANAGE_GRANTS, document.id)
+        return decision.allowed
 
     @classmethod
     def can_view_document_audit(cls, db: Session, user: User, document: Document) -> bool:
-        """
-        Owner, users with active permission, or system admins can view document-specific audit history.
-        """
+        """Admin or users with active access can view audit history."""
         if user.role == "admin":
             return True
         return cls.can_read_document(db, user, document)
@@ -126,57 +90,31 @@ class AuthorizationPolicy:
     @classmethod
     def require_read(cls, db: Session, user: User, document: Optional[Document]) -> Document:
         """
-        Requires read permission.
-        Consistent 404 response if document does not exist OR user lacks permission
-        to prevent information disclosure / resource enumeration.
+        Requires read permission. Uniform 404 on any denial (Invariant I3).
         """
-        if not document or not cls.can_read_document(db, user, document):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
-        return document
+        doc_id = document.id if document else "00000000-0000-0000-0000-000000000000"
+        return AuthorizationService.enforce(db, user, Action.VIEW, doc_id)
 
     @classmethod
     def require_edit(cls, db: Session, user: User, document: Optional[Document]) -> Document:
         """
-        Requires edit permission.
+        Requires edit permission. Uniform 404 on any denial (Invariant I3).
         """
-        if not document or not cls.can_read_document(db, user, document):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
-        if not cls.can_edit_document(db, user, document):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to edit this document"
-            )
-        return document
+        doc_id = document.id if document else "00000000-0000-0000-0000-000000000000"
+        return AuthorizationService.enforce(db, user, Action.EDIT, doc_id)
 
     @classmethod
     def require_owner(cls, db: Session, user: User, document: Optional[Document]) -> Document:
         """
-        Requires ownership.
+        Requires ownership. Uniform 404 on any denial (Invariant I3).
         """
-        if not document or not cls.can_read_document(db, user, document):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
-        if not cls.can_manage_permissions(db, user, document):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the document owner can perform this operation"
-            )
-        return document
+        doc_id = document.id if document else "00000000-0000-0000-0000-000000000000"
+        return AuthorizationService.enforce(db, user, Action.MANAGE_GRANTS, doc_id)
 
     @staticmethod
     def require_admin(user: User) -> None:
-        """
-        Requires global Admin role.
-        """
-        if user.role != "admin":
+        """Requires global Admin role."""
+        if not user or user.role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Administrative privilege required"

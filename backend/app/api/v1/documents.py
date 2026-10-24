@@ -13,10 +13,11 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.permission import DocumentPermission
-from app.schemas.document import DocumentResponse, DocumentListResponse, DocumentUpdate
+from app.schemas.document import DocumentResponse, DocumentListResponse, DocumentUpdate, OwnershipTransferRequest
 from app.schemas.document_version import DocumentVersionResponse, DocumentVersionListResponse
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action, raise_not_found, get_admin_metadata_view
 from app.storage.local import (
     storage_service,
     sanitize_filename,
@@ -31,12 +32,24 @@ from app.services.classification_policy import get_security_policy, evaluate_dow
 router = APIRouter()
 
 def build_document_response(doc: Document, user: User, db: Session) -> DocumentResponse:
-    """Helper to compute effective permission for requesting user."""
+    """Helper to compute effective permission for requesting user with Admin Blindness enforcement."""
+    perm = None
+    has_break_glass = False
     if doc.owner_id == user.id:
         eff_perm = "owner"
     else:
         perm = AuthorizationPolicy.get_active_permission(db, doc.id, user.id)
-        eff_perm = perm.permission_level if perm else ("admin" if user.role == "admin" else "none")
+        if user.role == "admin":
+            from app.services.authorization import AuthorizationService
+            has_break_glass = AuthorizationService._has_active_break_glass(db, user.id, doc.id)
+        eff_perm = perm.permission_level if perm else ("break_glass" if has_break_glass else "none")
+
+    # Invariant I1: Admin Blindness
+    # Admins without an explicit owner grant or active break-glass cannot view filenames or titles
+    is_admin_blind = (user.role == "admin" and doc.owner_id != user.id and not perm and not has_break_glass)
+    title = "[REDACTED - ADMIN BLINDNESS]" if is_admin_blind else doc.title
+    filename = "[REDACTED - ADMIN BLINDNESS]" if is_admin_blind else doc.original_filename
+    desc = None if is_admin_blind else doc.description
 
     owner = doc.owner
     current_ver = 1
@@ -50,14 +63,14 @@ def build_document_response(doc: Document, user: User, db: Session) -> DocumentR
 
     return DocumentResponse(
         id=doc.id,
-        title=doc.title,
-        description=doc.description,
+        title=title,
+        description=desc,
         category=doc.category,
         classification=doc.classification if hasattr(doc, "classification") and doc.classification else "Internal",
         owner_id=doc.owner_id,
         owner_email=owner.email if owner else None,
         owner_name=owner.display_name if owner else None,
-        original_filename=doc.original_filename,
+        original_filename=filename,
         detected_media_type=doc.detected_media_type,
         file_size=doc.file_size,
         checksum=doc.checksum,
@@ -378,10 +391,10 @@ def get_document_details(
 ):
     """
     Returns document metadata.
-    Enforces server-side authorization. Unauthorized access yields consistent 404.
+    Enforces server-side authorization via central AuthorizationService.
+    Unauthorized or nonexistent documents yield identical 404 responses.
     """
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_read(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.VIEW, document_id)
     return build_document_response(doc, current_user, db)
 
 @router.get("/{document_id}/download")
@@ -393,59 +406,12 @@ def download_document(
 ):
     """
     Authorized streaming download:
-    - Live authorization verification against current database state (immediate revocation guarantee)
+    - Central AuthorizationService verification against current database state
     - Returns streamed bytes with safe Content-Disposition headers and nosniff protection
     - Logs audit trail of download
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    
-    # Live authorization check (will reject immediately if access was revoked or expired)
-    if not doc or not AuthorizationPolicy.can_read_document(db, current_user, doc):
-        now_utc = datetime.now(timezone.utc)
-        expired_perm = db.query(DocumentPermission).filter(
-            DocumentPermission.document_id == document_id,
-            DocumentPermission.user_id == current_user.id,
-            DocumentPermission.revoked_at.is_(None),
-            DocumentPermission.expires_at.isnot(None),
-            DocumentPermission.expires_at <= now_utc
-        ).first()
-
-        action = "document.access.expired" if expired_perm else "document.download.denied"
-        reason = "Access grant has expired" if expired_perm else "Unauthorized download attempt"
-        log_audit_event(
-            db=db,
-            action=action,
-            resource_type="document",
-            resource_id=document_id,
-            outcome="denied",
-            actor_id=current_user.id,
-            request_id=request_id,
-            metadata={"reason": reason}
-        )
-        check_and_notify_repeated_denials(
-            db=db,
-            user_id=current_user.id,
-            resource_id=document_id,
-            resource_title=doc.title if doc else None
-        )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Enforce active classification security policy on download
-    policy = get_security_policy(db, doc.classification)
-    allowed, reason, audit_action = evaluate_download_access(doc, current_user, policy)
-    if not allowed:
-        log_audit_event(
-            db=db,
-            action=audit_action or "document.download.policy_denied",
-            resource_type="document",
-            resource_id=doc.id,
-            outcome="denied",
-            actor_id=current_user.id,
-            request_id=request_id,
-            metadata={"reason": reason, "classification": doc.classification}
-        )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+    doc = AuthorizationService.enforce(db, current_user, Action.DOWNLOAD, document_id, request_id=request_id)
 
     if not storage_service.exists(doc.internal_storage_key):
         log_audit_event(
@@ -536,8 +502,7 @@ def update_document_metadata(
     Enforces 'edit' authorization level. Viewers cannot edit.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_edit(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.EDIT, document_id, request_id=request_id)
 
     changes = {}
     if update_data.title is not None and update_data.title.strip():
@@ -597,8 +562,7 @@ def delete_document(
     Cleans up private storage and marks deleted_at in database.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.DELETE, document_id, request_id=request_id)
 
     # Remove underlying file from private storage
     storage_service.delete_file(doc.internal_storage_key)
@@ -632,10 +596,9 @@ def list_document_versions(
 ):
     """
     Lists version history for an authorized document.
-    Enforces server-side read authorization.
+    Enforces server-side VIEW_METADATA authorization via central AuthorizationService.
     """
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_read(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.VIEW_METADATA, document_id)
 
     versions = (
         db.query(DocumentVersion)
@@ -690,8 +653,7 @@ async def upload_document_version(
     request_id = get_request_id(request)
     check_rate_limit(request, upload_limiter, key_prefix="upload")
 
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_edit(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.EDIT, document_id, request_id=request_id)
 
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
@@ -817,32 +779,22 @@ def download_document_version(
     Validates server-side permissions and storage checksum before streaming.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_read(db, current_user, doc)
-
     version = db.query(DocumentVersion).filter(
         DocumentVersion.id == version_id,
         DocumentVersion.document_id == document_id
     ).first()
 
     if not version:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document version not found")
+        raise_not_found()
 
-    # Enforce active classification security policy on version download
-    policy = get_security_policy(db, doc.classification)
-    allowed, reason, audit_action = evaluate_download_access(doc, current_user, policy)
-    if not allowed:
-        log_audit_event(
-            db=db,
-            action=audit_action or "document.version.download.policy_denied",
-            resource_type="document",
-            resource_id=doc.id,
-            outcome="denied",
-            actor_id=current_user.id,
-            request_id=request_id,
-            metadata={"reason": reason, "version_number": version.version_number, "classification": doc.classification}
-        )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+    doc = AuthorizationService.enforce(
+        db,
+        current_user,
+        Action.DOWNLOAD,
+        document_id,
+        context={"version_number": version.version_number},
+        request_id=request_id
+    )
 
     if not storage_service.exists(version.storage_key):
         log_audit_event(
@@ -929,8 +881,7 @@ def restore_document_version(
     Requires 'edit' authorization.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_edit(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.ROLLBACK, document_id, request_id=request_id)
 
     version_to_restore = db.query(DocumentVersion).filter(
         DocumentVersion.id == version_id,
@@ -1024,3 +975,57 @@ def restore_document_version(
         is_current=True,
         created_at=restored_version.created_at
     )
+
+@router.post("/{document_id}/transfer-ownership", response_model=DocumentResponse)
+def transfer_document_ownership(
+    document_id: str,
+    req_body: OwnershipTransferRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Ownership transfer workflow:
+    - Only the current document owner can transfer ownership.
+    - Scoped per organization tenant.
+    - Increments permission_epoch and logs tamper-evident audit record.
+    """
+    request_id = get_request_id(request)
+    doc = AuthorizationService.transfer_ownership(
+        db=db,
+        document_id=document_id,
+        current_owner=current_user,
+        new_owner_id=req_body.new_owner_id,
+        request_id=request_id
+    )
+    return build_document_response(doc, current_user, db)
+
+@router.post("/{document_id}/restore", response_model=DocumentResponse)
+def restore_trashed_document(
+    document_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Restores a soft-deleted document from trash.
+    Only the document owner can restore their document.
+    """
+    request_id = get_request_id(request)
+    doc = AuthorizationService.enforce(db, current_user, Action.RESTORE, document_id, request_id=request_id)
+    doc.deleted_at = None
+    doc.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(doc)
+    log_audit_event(
+        db=db,
+        action="document.restore",
+        resource_type="document",
+        resource_id=doc.id,
+        outcome="success",
+        actor_id=current_user.id,
+        request_id=request_id,
+        metadata={"title": doc.title}
+    )
+    return build_document_response(doc, current_user, db)
+

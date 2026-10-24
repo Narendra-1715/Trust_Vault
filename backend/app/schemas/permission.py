@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 class PermissionGrantRequest(BaseModel):
     user_id: Optional[str] = None
     email: Optional[EmailStr] = None
-    permission_level: str = Field(..., pattern="^(read|edit)$")
+    permission_level: str = Field(..., pattern="^(read|edit|preview|view)$")
+    min_version_number: Optional[int] = None
+    max_version_number: Optional[int] = None
     expires_at: Optional[datetime] = None
 
 class PermissionRevokeRequest(BaseModel):
@@ -18,6 +20,8 @@ class PermissionResponse(BaseModel):
     user_email: str
     user_display_name: str
     permission_level: str
+    min_version_number: Optional[int] = None
+    max_version_number: Optional[int] = None
     granted_by: Optional[str]
     granted_by_email: Optional[str] = None
     granted_at: datetime

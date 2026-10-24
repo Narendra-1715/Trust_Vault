@@ -40,3 +40,28 @@ class DocumentListResponse(BaseModel):
     page: int
     page_size: int
     documents: List[DocumentResponse]
+
+class OwnershipTransferRequest(BaseModel):
+    new_owner_id: str = Field(..., min_length=1, max_length=36)
+
+class AdminDocumentMetadataResponse(BaseModel):
+    id: str
+    owner_id: str
+    size_bucket: str
+    file_size: int
+    category: str
+    classification: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    org_id: str
+    permission_epoch: int = 1
+    title: str = "[REDACTED - ADMIN BLINDNESS]"
+    original_filename: str = "[REDACTED - ADMIN BLINDNESS]"
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AdminDocumentMetadataListResponse(BaseModel):
+    total: int
+    documents: List[AdminDocumentMetadataResponse]
+

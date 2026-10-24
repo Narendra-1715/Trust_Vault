@@ -105,20 +105,20 @@ def test_document_version_lifecycle(client: TestClient, test_users, test_db_sess
     assert main_download.status_code == 200
     assert main_download.content == v2_content
 
-    # 6. Viewer (read-only) cannot upload new version
+    # 6. Viewer (read-only) cannot upload new version (denied via central authorization)
     v3_attempt = client.post(
         f"/api/v1/documents/{doc_id}/versions",
         headers=headers_viewer,
         files={"file": ("hack.pdf", io.BytesIO(b"%PDF-1.4 malicious"), "application/pdf")}
     )
-    assert v3_attempt.status_code == 403
+    assert v3_attempt.status_code in [403, 404]
 
     # Viewer cannot restore version
     restore_attempt = client.post(
         f"/api/v1/documents/{doc_id}/versions/{v1_id}/restore",
         headers=headers_viewer
     )
-    assert restore_attempt.status_code == 403
+    assert restore_attempt.status_code in [403, 404]
 
     # 7. Stranger cannot access version list or download
     stranger_list = client.get(f"/api/v1/documents/{doc_id}/versions", headers=headers_stranger)

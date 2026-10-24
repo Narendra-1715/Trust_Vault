@@ -18,6 +18,7 @@ from app.schemas.ai import (
 from app.schemas.permission import PermissionResponse
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action
 from app.ai.service import ai_service
 from app.core.rate_limit import ai_limiter, check_rate_limit
 from app.audit.service import log_audit_event
@@ -41,8 +42,7 @@ def request_ai_recommendations(
     request_id = get_request_id(request)
     check_rate_limit(request, ai_limiter, key_prefix="ai")
 
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=request_id)
 
     # Fetch candidate organization users
     candidate_users_db = db.query(User).filter(
@@ -114,8 +114,7 @@ def approve_ai_recommendations(
     Only the document owner's deliberate approval creates active permission records.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=request_id)
 
     suggestion = db.query(AIAccessSuggestion).filter(
         AIAccessSuggestion.id == approval_in.suggestion_id,
@@ -169,6 +168,7 @@ def approve_ai_recommendations(
     suggestion.reviewed_at = now_utc
     suggestion.reviewed_by = current_user.id
 
+    doc.permission_epoch = (doc.permission_epoch or 1) + 1
     db.commit()
     for p in applied_permissions:
         db.refresh(p)
@@ -204,8 +204,7 @@ def reject_ai_recommendations(
     Ensures zero permission changes occur.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=request_id)
 
     suggestion = db.query(AIAccessSuggestion).filter(
         AIAccessSuggestion.id == rejection_in.suggestion_id,
@@ -226,6 +225,7 @@ def reject_ai_recommendations(
     suggestion.reviewed_at = datetime.now(timezone.utc)
     suggestion.reviewed_by = current_user.id
 
+    doc.permission_epoch = (doc.permission_epoch or 1) + 1
     db.commit()
 
     log_audit_event(

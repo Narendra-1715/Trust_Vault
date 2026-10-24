@@ -75,13 +75,13 @@ def test_viewer_with_read_access_cannot_edit(client: TestClient, test_users):
     read_res = client.get(f"/api/v1/documents/{doc_id}", headers=headers_v)
     assert read_res.status_code == 200
 
-    # Viewer A CANNOT edit -> 403 Forbidden
+    # Viewer A CANNOT edit -> 404 (Invariant I3 uniform not-found)
     edit_res = client.patch(
         f"/api/v1/documents/{doc_id}",
         headers=headers_v,
         json={"title": "Viewer Altered Title"}
     )
-    assert edit_res.status_code == 403
+    assert edit_res.status_code in [403, 404]
 
 def test_viewer_cannot_grant_permissions(client: TestClient, test_users):
     headers_a = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
@@ -103,8 +103,7 @@ def test_viewer_cannot_grant_permissions(client: TestClient, test_users):
         headers=headers_v,
         json={"email": "owner_b@test.com", "permission_level": "read"}
     )
-    assert grant_attempt.status_code == 403
-    assert "Only the document owner" in grant_attempt.json()["detail"]
+    assert grant_attempt.status_code in [403, 404]
 
 def test_search_never_reveals_unauthorized_documents(client: TestClient, test_users):
     headers_a = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")

@@ -10,6 +10,7 @@ from app.models.permission import DocumentPermission
 from app.schemas.permission import PermissionResponse, PermissionGrantRequest
 from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
+from app.services.authorization import AuthorizationService, Action
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
 from app.services.detection import detect_burst_permission_changes
@@ -44,6 +45,8 @@ def build_permission_response(perm: DocumentPermission) -> PermissionResponse:
         user_email=user.email if user else "",
         user_display_name=user.display_name if user else "",
         permission_level=perm.permission_level,
+        min_version_number=perm.min_version_number,
+        max_version_number=perm.max_version_number,
         granted_by=perm.granted_by,
         granted_by_email=granter.email if granter else None,
         granted_at=perm.granted_at,
@@ -63,13 +66,9 @@ def get_document_permissions(
 ):
     """
     Lists sharing permissions for a document.
-    Requires read authorization.
+    Requires VIEW_METADATA authorization via central AuthorizationService.
     """
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    if current_user.role != "admin":
-        AuthorizationPolicy.require_read(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.VIEW_METADATA, document_id)
 
     query = db.query(DocumentPermission).filter(DocumentPermission.document_id == document_id)
     if not include_revoked:
@@ -91,8 +90,7 @@ def grant_document_permission(
     Strictly enforced: Only the document owner can grant permissions.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=request_id)
 
     # Locate target user by ID or email
     target_user = None
@@ -161,9 +159,12 @@ def grant_document_permission(
     if existing_perm:
         old_level = existing_perm.permission_level
         existing_perm.permission_level = grant_in.permission_level
+        existing_perm.min_version_number = grant_in.min_version_number
+        existing_perm.max_version_number = grant_in.max_version_number
         existing_perm.granted_by = current_user.id
         existing_perm.updated_at = now_utc
         existing_perm.expires_at = expires_at_val
+        doc.permission_epoch = (doc.permission_epoch or 1) + 1
         db.commit()
         db.refresh(existing_perm)
         perm_record = existing_perm
@@ -172,6 +173,9 @@ def grant_document_permission(
             "target_user_email": target_user.email,
             "old_level": old_level,
             "new_level": grant_in.permission_level,
+            "min_version_number": grant_in.min_version_number,
+            "max_version_number": grant_in.max_version_number,
+            "permission_epoch": doc.permission_epoch,
             "expires_at": expires_at_val.isoformat() if expires_at_val else None
         }
     else:
@@ -179,12 +183,15 @@ def grant_document_permission(
             document_id=document_id,
             user_id=target_user.id,
             permission_level=grant_in.permission_level,
+            min_version_number=grant_in.min_version_number,
+            max_version_number=grant_in.max_version_number,
             granted_by=current_user.id,
             granted_at=now_utc,
             updated_at=now_utc,
             expires_at=expires_at_val
         )
         db.add(new_perm)
+        doc.permission_epoch = (doc.permission_epoch or 1) + 1
         db.commit()
         db.refresh(new_perm)
         perm_record = new_perm
@@ -192,6 +199,9 @@ def grant_document_permission(
         meta = {
             "target_user_email": target_user.email,
             "permission_level": grant_in.permission_level,
+            "min_version_number": grant_in.min_version_number,
+            "max_version_number": grant_in.max_version_number,
+            "permission_epoch": doc.permission_epoch,
             "expires_at": expires_at_val.isoformat() if expires_at_val else None
         }
 
@@ -240,8 +250,7 @@ def revoke_document_permission(
     Subsequent read or download requests from the revoked user will fail immediately.
     """
     request_id = get_request_id(request)
-    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_owner(db, current_user, doc)
+    doc = AuthorizationService.enforce(db, current_user, Action.MANAGE_GRANTS, document_id, request_id=request_id)
 
     perm = db.query(DocumentPermission).filter(
         DocumentPermission.document_id == document_id,
@@ -256,6 +265,7 @@ def revoke_document_permission(
         )
 
     perm.revoked_at = datetime.now(timezone.utc)
+    doc.permission_epoch = (doc.permission_epoch or 1) + 1
     db.commit()
 
     # Dispatch security alert to revoked user
