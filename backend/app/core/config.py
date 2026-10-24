@@ -136,19 +136,24 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         val = self.BACKEND_CORS_ORIGINS
+        origins: List[str] = []
         if isinstance(val, list):
-            return [o.strip() for o in val if o and o.strip() != "*" and o.strip().lower() != "null"]
-        if isinstance(val, str):
+            origins = [o.strip() for o in val if o and o.strip() != "*" and o.strip().lower() != "null"]
+        elif isinstance(val, str):
             val = val.strip()
             if val.startswith("["):
                 try:
                     import json
                     parsed = json.loads(val)
-                    return [o.strip() for o in parsed if o and o.strip() != "*" and o.strip().lower() != "null"]
+                    origins = [o.strip() for o in parsed if o and o.strip() != "*" and o.strip().lower() != "null"]
                 except Exception:
                     pass
-            return [origin.strip() for origin in val.split(",") if origin.strip() and origin.strip() != "*" and origin.strip().lower() != "null"]
-        return []
+            if not origins:
+                origins = [origin.strip() for origin in val.split(",") if origin.strip() and origin.strip() != "*" and origin.strip().lower() != "null"]
+        for prod_origin in ["https://trustvault-ui.onrender.com"]:
+            if prod_origin not in origins:
+                origins.append(prod_origin)
+        return origins
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 

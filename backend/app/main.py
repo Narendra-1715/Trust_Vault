@@ -135,7 +135,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), usb=(), payment=()"
         response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+
+        # Cross-Origin-Resource-Policy: Permit permitted frontend origins (e.g. Render UI) to read cross-origin API responses
+        origin_header = request.headers.get("origin")
+        if origin_header and (origin_header in settings.cors_origins or "onrender.com" in origin_header):
+            response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+        else:
+            response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
@@ -150,7 +157,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Phase 9 CORS Strictness: Never allow credentials if origin was not explicitly permitted
         allow_origin = response.headers.get("access-control-allow-origin")
-        if not allow_origin or allow_origin not in settings.cors_origins:
+        if not allow_origin or (allow_origin not in settings.cors_origins and not allow_origin.endswith(".onrender.com")):
             if "access-control-allow-credentials" in response.headers:
                 del response.headers["access-control-allow-credentials"]
 
@@ -160,6 +167,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^https:\/\/.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

@@ -41,7 +41,16 @@ import type {
 
 // Dynamically resolve API URL with automated protocol & domain handling for cloud hosting (Render/Vercel)
 function resolveApiUrl(raw?: string): string {
-  if (!raw) return '';
+  const PROD_DEFAULT = 'https://trustvault-api-s6ba.onrender.com';
+  if (!raw || raw.trim() === '' || raw === 'undefined') {
+    if (typeof window !== 'undefined') {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return '';
+      }
+      return PROD_DEFAULT;
+    }
+    return PROD_DEFAULT;
+  }
   let stripped = raw.trim().replace(/\/+$/, '');
   
   if (!stripped.startsWith('http://') && !stripped.startsWith('https://')) {
