@@ -106,9 +106,7 @@ def seed_database():
             b"trailer<</Size 5/Root 1 0 R>>\nstartxref\n279\n%%EOF\n"
         )
         key1 = f"{uuid.uuid4().hex}.bin"
-        storage_service._resolve_safe_path(key1)
-        with open(os.path.join(storage_service.base_dir, key1), "wb") as f:
-            f.write(doc1_content)
+        storage_service.save_file(io.BytesIO(doc1_content), key1)
         checksum1 = hashlib.sha256(doc1_content).hexdigest()
 
         doc1 = Document(
@@ -127,8 +125,7 @@ def seed_database():
         # 2. Document 2 for Owner A: Strategy text document
         doc2_content = b"TRUSTVAULT CONFIDENTIAL STRATEGIC PLAN 2026\n1. Enterprise expansion\n2. Cryptographic auditing"
         key2 = f"{uuid.uuid4().hex}.bin"
-        with open(os.path.join(storage_service.base_dir, key2), "wb") as f:
-            f.write(doc2_content)
+        storage_service.save_file(io.BytesIO(doc2_content), key2)
         checksum2 = hashlib.sha256(doc2_content).hexdigest()
 
         doc2 = Document(
@@ -147,8 +144,7 @@ def seed_database():
         # 3. Document 3 for Owner B: Security Analysis
         doc3_content = b"TRUSTVAULT PRIVATE SECURITY MODEL: Threat vectors, isolation boundaries, zero-trust."
         key3 = f"{uuid.uuid4().hex}.bin"
-        with open(os.path.join(storage_service.base_dir, key3), "wb") as f:
-            f.write(doc3_content)
+        storage_service.save_file(io.BytesIO(doc3_content), key3)
         checksum3 = hashlib.sha256(doc3_content).hexdigest()
 
         doc3 = Document(
