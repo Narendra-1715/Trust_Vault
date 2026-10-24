@@ -8,6 +8,7 @@ from app.models.document import Document
 from app.models.session import UserSession
 from app.models.audit import AuditEvent
 from app.core.security import create_access_token
+from app.core.rate_limit import auth_ip_limiter, auth_user_limiter
 
 def get_auth_headers(client: TestClient, email: str, password: str = "TestPass123!") -> dict:
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": password})
@@ -23,6 +24,10 @@ def test_failed_login_detection_and_duplicate_suppression(client: TestClient, te
     """
     admin_headers = get_auth_headers(client, "admin@test.com", "AdminPass123!")
     target_email = "owner_a@test.com"
+
+    # Reset rate limiters after fixture setup to ensure 5 failed attempts test the detection rule cleanly
+    auth_ip_limiter.reset()
+    auth_user_limiter.reset()
 
     # 4 failed attempts - threshold (5) not yet reached
     for _ in range(4):
@@ -48,7 +53,11 @@ def test_failed_login_detection_and_duplicate_suppression(client: TestClient, te
     assert "WrongPassword!" not in str(alert["investigation_metadata"])  # Data hygiene
 
     # 6th and 7th failed attempt within cooldown window - duplicate suppression increments count
+    auth_ip_limiter.reset()
+    auth_user_limiter.reset()
     client.post("/api/v1/auth/login", json={"email": target_email, "password": "WrongPassword!"})
+    auth_ip_limiter.reset()
+    auth_user_limiter.reset()
     client.post("/api/v1/auth/login", json={"email": target_email, "password": "WrongPassword!"})
 
     alerts_res2 = client.get("/api/v1/alerts?event_type=brute_force_login", headers=admin_headers)
@@ -244,6 +253,10 @@ def test_burst_permission_changes_and_rapid_sessions(client: TestClient, test_us
     admin_headers = get_auth_headers(client, "admin@test.com", "AdminPass123!")
     owner_headers = get_auth_headers(client, "owner_a@test.com", "OwnerAPass123!")
     viewer_user = test_users["viewer_a"]
+
+    # Reset rate limiters before testing rapid sessions to avoid hitting the 5/min IP limit
+    auth_ip_limiter.reset()
+    auth_user_limiter.reset()
 
     # 1. Test rapid sessions: Login 4 times in quick succession
     for _ in range(4):

@@ -29,7 +29,7 @@ from app.storage.local import (
     validate_file_content
 )
 from app.core.config import settings
-from app.core.rate_limit import upload_limiter, check_rate_limit
+from app.core.rate_limit import upload_limiter, content_download_limiter, check_rate_limit
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification, check_and_notify_repeated_denials
 from app.services.classification_policy import get_security_policy, evaluate_download_access, VALID_CLASSIFICATIONS
@@ -393,6 +393,7 @@ def download_document(
     - Logs audit trail of download
     """
     request_id = get_request_id(request)
+    check_rate_limit(request, content_download_limiter, key_prefix="download", identifier=current_user.id)
     doc = AuthorizationService.enforce(db, current_user, Action.DOWNLOAD, document_id, request_id=request_id)
 
     stream_gen = ContentService.stream(
@@ -765,6 +766,7 @@ def download_document_version(
     Validates server-side permissions and storage checksum before streaming.
     """
     request_id = get_request_id(request)
+    check_rate_limit(request, content_download_limiter, key_prefix="download", identifier=current_user.id)
     # Enforce authorization on document FIRST before probing versions
     doc = AuthorizationService.enforce(
         db,

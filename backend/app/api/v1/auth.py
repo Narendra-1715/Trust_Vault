@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.config import settings
 from app.core.security import verify_password, hash_password, create_access_token
-from app.core.rate_limit import login_limiter, check_rate_limit
+from app.core.rate_limit import auth_ip_limiter, auth_user_limiter, check_rate_limit
 from app.core.user_agent import parse_device_info
 from app.models.user import User
 from app.models.session import UserSession
@@ -22,15 +22,20 @@ router = APIRouter()
 @router.post("/login", response_model=TokenResponse)
 def login(
     request: Request,
+    response: Response,
     credentials: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
     Authenticates user with Argon2id and issues short-lived JWT token.
-    Rate limited against brute-force attacks.
+    Rate limited against brute-force attacks (Phase 9 tiered limits: 5/min IP, 5/min username).
     """
     request_id = get_request_id(request)
-    check_rate_limit(request, login_limiter, key_prefix="login")
+    normalized_email = credentials.email.strip().lower()
+
+    # Phase 9: Tiered Auth Rate Limiting (5/min per IP, 5/min per username)
+    check_rate_limit(request, auth_ip_limiter, key_prefix="login_ip")
+    check_rate_limit(request, auth_user_limiter, key_prefix="login_user", identifier=normalized_email)
 
     # Determine client IP and User Agent early for security detection
     client_ip = request.client.host if request.client else "unknown"
@@ -41,8 +46,6 @@ def login(
     user_agent = request.headers.get("user-agent", "Unknown")
     device_info = parse_device_info(user_agent)
 
-    # Normalize email to lowercase
-    normalized_email = credentials.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
 
     if not user or not verify_password(credentials.password, user.password_hash):
@@ -153,6 +156,17 @@ def login(
 
     detect_rapid_sessions(db=db, actor_id=user.id, ip_address=client_ip, request_id=request_id)
 
+    # Phase 9: Cookie security (__Host- prefix, Secure, HttpOnly, SameSite=Strict, Path=/)
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        secure=settings.COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE.lower()
+    )
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
@@ -161,6 +175,25 @@ def login(
         display_name=user.display_name,
         role=user.role
     )
+
+@router.post("/logout")
+def logout(
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clears the __Host- prefixed session cookie and terminates user session.
+    """
+    response.delete_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        path="/",
+        secure=settings.COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE.lower()
+    )
+    return {"message": "Successfully logged out"}
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(

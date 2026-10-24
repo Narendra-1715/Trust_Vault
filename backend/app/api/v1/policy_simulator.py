@@ -9,6 +9,7 @@ from app.policies.authorization import AuthorizationPolicy
 from app.services.authorization import AuthorizationService, Action
 from app.schemas.policy_simulator import PolicySimulationRequest, PolicySimulationResponse, RuleEvaluationResult
 from app.api.deps import get_current_user, get_request_id
+from app.core.rate_limit import policy_simulator_limiter, check_rate_limit
 from app.audit.service import log_audit_event
 from app.services.classification_policy import (
     get_security_policy,
@@ -33,6 +34,7 @@ def simulate_policy_grant(
     - Uses identical central policy evaluation logic as actual grant creation.
     """
     request_id = get_request_id(request)
+    check_rate_limit(request, policy_simulator_limiter, key_prefix="policy_sim", identifier=current_user.id)
 
     # 1. Fetch document and enforce grant-management authorization via AuthorizationService
     # Restricts simulation strictly to documents the caller owns or manages (Invariant I3 uniform 404)

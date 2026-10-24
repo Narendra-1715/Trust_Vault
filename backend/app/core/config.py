@@ -70,7 +70,19 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY_ID: Optional[str] = None
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_REGION_NAME: Optional[str] = "us-east-1"
-    MAX_FILE_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB
+    MAX_FILE_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB hard cap (Phase 9)
+    MAX_JSON_BODY_BYTES: int = 1 * 1024 * 1024   # 1 MB hard cap for JSON APIs (Phase 9)
+
+    # External Security Posture & Headers (Phase 9)
+    HSTS_MAX_AGE_SECONDS: int = 63072000  # 2 years (preload eligible)
+    HSTS_INCLUDE_SUBDOMAINS: bool = True
+    HSTS_PRELOAD: bool = True
+    ENFORCE_CLOUDFLARE_ORIGIN: bool = False  # Set True in production to reject direct-to-origin
+
+    # Cookie Security (Phase 9 RFC 6265bis __Host- prefix)
+    SESSION_COOKIE_NAME: str = "__Host-trustvault_session"
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "Strict"
 
     # Backup & Disaster Recovery
     BACKUP_DIR: str = "./data/backups"
@@ -112,17 +124,18 @@ class Settings(BaseSettings):
     def cors_origins(self) -> List[str]:
         val = self.BACKEND_CORS_ORIGINS
         if isinstance(val, list):
-            return val
+            return [o.strip() for o in val if o and o.strip() != "*" and o.strip().lower() != "null"]
         if isinstance(val, str):
             val = val.strip()
             if val.startswith("["):
                 try:
                     import json
-                    return json.loads(val)
+                    parsed = json.loads(val)
+                    return [o.strip() for o in parsed if o and o.strip() != "*" and o.strip().lower() != "null"]
                 except Exception:
                     pass
-            return [origin.strip() for origin in val.split(",") if origin.strip()]
-        return ["*"]
+            return [origin.strip() for origin in val.split(",") if origin.strip() and origin.strip() != "*" and origin.strip().lower() != "null"]
+        return []
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 

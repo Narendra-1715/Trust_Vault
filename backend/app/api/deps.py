@@ -37,6 +37,13 @@ def get_current_user(
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1]
+
+    if not token:
+        # Phase 9: Cookie security fallback (__Host- prefix HttpOnly session cookie)
+        from app.core.config import settings
+        cookie_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+        if cookie_token:
+            token = cookie_token
             
     if not token:
         raise credentials_exception

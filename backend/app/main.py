@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Request
+import json
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
@@ -18,17 +20,113 @@ app = FastAPI(
 async def document_not_found_handler(request: Request, exc: DocumentNotFoundException):
     return not_found_response()
 
-# Strict Security Headers Middleware
+# Phase 9: Request Body Size Enforcement ASGI Middleware
+# Hard cap 50 MB for file uploads, 1 MB for JSON API payloads.
+# Rejects oversized payloads BEFORE buffering to disk or memory.
+class RequestBodyLimitMiddleware:
+    def __init__(self, app, max_upload_bytes: int = settings.MAX_FILE_SIZE_BYTES, max_json_bytes: int = settings.MAX_JSON_BODY_BYTES):
+        self.app = app
+        self.max_upload_bytes = max_upload_bytes
+        self.max_json_bytes = max_json_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        method = scope.get("method", "GET")
+        is_upload = (
+            path.endswith("/upload") or
+            ("/versions" in path and method == "POST")
+        )
+        max_limit = self.max_upload_bytes if is_upload else self.max_json_bytes
+
+        # 1. Early Content-Length Header Check
+        headers = dict(scope.get("headers", []))
+        cl_header = headers.get(b"content-length")
+        if cl_header:
+            try:
+                cl_val = int(cl_header.decode("ascii"))
+                if cl_val > max_limit:
+                    await self._send_413(send, max_limit)
+                    return
+            except ValueError:
+                pass
+
+        # 2. Streaming Chunk Limiter (Defends against chunked/unbounded streams)
+        received_bytes = 0
+        async def limited_receive():
+            nonlocal received_bytes
+            message = await receive()
+            if message["type"] == "http.request":
+                chunk_len = len(message.get("body", b""))
+                received_bytes += chunk_len
+                if received_bytes > max_limit:
+                    raise MemoryError("payload_too_large")
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except MemoryError as e:
+            if str(e) == "payload_too_large":
+                await self._send_413(send, max_limit)
+            else:
+                raise
+
+    async def _send_413(self, send, max_limit: int):
+        body = json.dumps({
+            "detail": f"Request entity too large. Maximum allowed request size is {max_limit} bytes."
+        }).encode("utf-8")
+        hsts_val = f"max-age={settings.HSTS_MAX_AGE_SECONDS}; includeSubDomains" + ("; preload" if settings.HSTS_PRELOAD else "")
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+                (b"x-content-type-options", b"nosniff"),
+                (b"x-frame-options", b"DENY"),
+                (b"content-security-policy", b"default-src 'none'; frame-ancestors 'none'; object-src 'none';"),
+                (b"strict-transport-security", hsts_val.encode("ascii")),
+                (b"cross-origin-resource-policy", b"same-origin"),
+                (b"connection", b"close")
+            ]
+        })
+        await send({"type": "http.response.body", "body": body})
+
+app.add_middleware(RequestBodyLimitMiddleware)
+
+# Phase 9: Comprehensive Security Headers & Direct-to-Origin Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Cloudflare Direct-to-Origin Enforcement (when enabled in production)
+        if settings.ENFORCE_CLOUDFLARE_ORIGIN:
+            cf_ray = request.headers.get("cf-ray")
+            cf_connecting_ip = request.headers.get("cf-connecting-ip")
+            if not cf_ray or not cf_connecting_ip:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Direct-to-origin access is forbidden. All traffic must transit Cloudflare."}
+                )
+
         response = await call_next(request)
+
+        # Phase 9 Required External Security Headers
+        hsts_header = f"max-age={settings.HSTS_MAX_AGE_SECONDS}; includeSubDomains"
+        if settings.HSTS_PRELOAD:
+            hsts_header += "; preload"
+        response.headers["Strict-Transport-Security"] = hsts_header
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), usb=(), payment=()"
+        response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
-        # Phase 8: Strict Content-Security-Policy & Clickjacking Defense
+        # Content-Security-Policy (default restrictive policy)
         if "Content-Security-Policy" not in response.headers:
             response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'; object-src 'none';"
 
@@ -37,19 +135,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Cache-Control"] = "no-store, private"
             response.headers["Pragma"] = "no-cache"
 
-        if not settings.DEBUG:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # Phase 9 CORS Strictness: Never allow credentials if origin was not explicitly permitted
+        allow_origin = response.headers.get("access-control-allow-origin")
+        if not allow_origin or allow_origin not in settings.cors_origins:
+            if "access-control-allow-credentials" in response.headers:
+                del response.headers["access-control-allow-credentials"]
+
         return response
 
-app.add_middleware(SecurityHeadersMiddleware)
-
-# CORS Middleware
+# Phase 9: Hardened CORS Middleware (runs inside SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=600,  # Preflight cache max-age capped
     expose_headers=[
         "Content-Disposition",
         "X-Content-Type-Options",
@@ -59,9 +160,13 @@ app.add_middleware(
         "Cross-Origin-Resource-Policy",
         "X-TrustVault-Page",
         "X-TrustVault-Total-Pages",
-        "X-TrustVault-Watermark"
+        "X-TrustVault-Watermark",
+        "Retry-After"
     ]
 )
+
+# Outermost: SecurityHeadersMiddleware (runs on final response after all inner handlers)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Include API v1 Routers
 api_v1 = f"{settings.API_V1_STR}"

@@ -94,6 +94,27 @@ def test_storage(test_temp_dir):
     storage_service.base_dir = orig_base
     shutil.rmtree(storage_path, ignore_errors=True)
 
+@pytest.fixture(scope="function", autouse=True)
+def reset_rate_limiters():
+    """Resets in-memory sliding-window rate limiters before each test."""
+    from app.core.rate_limit import (
+        auth_ip_limiter,
+        auth_user_limiter,
+        content_download_limiter,
+        policy_simulator_limiter,
+        upload_limiter,
+        access_request_limiter,
+        ai_limiter
+    )
+    auth_ip_limiter.reset()
+    auth_user_limiter.reset()
+    content_download_limiter.reset()
+    policy_simulator_limiter.reset()
+    upload_limiter.reset()
+    access_request_limiter.reset()
+    ai_limiter.reset()
+    yield
+
 @pytest.fixture(scope="function")
 def client(test_db_session, test_storage):
     """FastAPI TestClient with overridden get_db dependency."""
