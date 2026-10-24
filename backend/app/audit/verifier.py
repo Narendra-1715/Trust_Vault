@@ -161,6 +161,23 @@ def verify_audit_integrity(
             legacy_hash = compute_raw_sha256(legacy_payload)
             if legacy_hash == event.event_hash:
                 is_match = True
+            elif not event.actor_id:
+                # Early legacy events serialized None as null (pre-Phase 5) instead of 'anonymous'
+                from app.audit.hash_chain import canonical_json, format_canonical_timestamp
+                legacy_null_payload = canonical_json({
+                    "id": str(event.id),
+                    "timestamp": format_canonical_timestamp(event.timestamp),
+                    "actor_id": None,
+                    "action": str(event.action),
+                    "resource_type": str(event.resource_type),
+                    "resource_id": str(event.resource_id) if event.resource_id else None,
+                    "outcome": str(event.outcome),
+                    "request_id": str(event.request_id) if event.request_id else None,
+                    "structured_metadata": event.structured_metadata or {},
+                    "previous_event_hash": str(event.previous_event_hash)
+                })
+                if compute_raw_sha256(legacy_null_payload) == event.event_hash:
+                    is_match = True
 
         if not is_match:
             reason = (

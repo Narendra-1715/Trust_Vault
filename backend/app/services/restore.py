@@ -474,6 +474,7 @@ def execute_restore(
                 id=s["id"],
                 user_id=s["user_id"],
                 session_token_jti=s.get("session_token_jti", s.get("session_token_hash", "")),
+                session_version=s.get("session_version", 1),
                 ip_address=s.get("ip_address"),
                 user_agent=s.get("user_agent"),
                 device_info=s.get("device_info"),
@@ -554,6 +555,22 @@ def execute_restore(
                 resolution_notes=sa.get("resolution_notes"),
                 created_at=parse_iso_dt(sa["created_at"]),
                 updated_at=parse_iso_dt(sa["updated_at"])
+            ))
+
+        for ai in tables.get("ai_suggestions", []):
+            db.add(AIAccessSuggestion(
+                id=ai["id"],
+                document_id=ai["document_id"],
+                requester_id=ai.get("requester_id"),
+                suggested_grants=ai.get("suggested_grants", []),
+                explanation=ai.get("explanation", ""),
+                provider_model=ai.get("provider_model", "mock"),
+                action_type=ai.get("action_type", "RECOMMEND_READ_GRANT"),
+                status=ai.get("status", "pending"),
+                created_at=parse_iso_dt(ai["created_at"]),
+                reviewed_at=parse_iso_dt(ai.get("reviewed_at")),
+                reviewed_by=ai.get("reviewed_by"),
+                decision=ai.get("decision")
             ))
 
         db.commit()
