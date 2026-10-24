@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     TIMING_LATENCY_FLOOR_MS: int = 30  # Milliseconds minimum floor for authorization denials
     TIMING_JITTER_MAX_MS: int = 15     # Milliseconds max cryptographically random jitter
 
+    # Audit Ledger & Cryptographic Chaining (Phase 5 / Invariant I5)
+    AUDIT_HMAC_KEY: str = "trustvault_audit_hmac_secret_key_distinct_from_data_encryption_9988"
+    AUDIT_IP_SALT_SECRET: str = "trustvault_daily_ip_salt_secret_change_in_production_11223344"
+    AUDIT_CHECKPOINT_DIR: str = "./data/audit_checkpoints"
+
     # Key Management & Envelope Encryption (Phase 2)
     KMS_PROVIDER: str = "local"  # "local", "aws_kms", "gcp_kms", "vault"
     LOCAL_KEK: Optional[str] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # 256-bit hex KEK
@@ -50,6 +55,11 @@ class Settings(BaseSettings):
                 return v.replace("postgres://", "postgresql+psycopg://", 1)
             elif v.startswith("postgresql://") and not v.startswith("postgresql+"):
                 return v.replace("postgresql://", "postgresql+psycopg://", 1)
+            elif v.startswith("sqlite:///./data/"):
+                backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                db_file = v.replace("sqlite:///./data/", "")
+                resolved_path = os.path.join(backend_dir, "data", db_file).replace("\\", "/")
+                return f"sqlite:///{resolved_path}"
         return v
     
     # Private Storage

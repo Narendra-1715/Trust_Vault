@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, Index, JSON
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index, JSON
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -8,6 +8,8 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    sequence_number = Column(Integer, nullable=False, default=1, index=True)
+    org_id = Column(String(64), nullable=False, default="default-org", index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     actor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     action = Column(String(100), nullable=False, index=True)
@@ -15,6 +17,8 @@ class AuditEvent(Base):
     resource_id = Column(String(100), nullable=True, index=True)
     outcome = Column(String(20), nullable=False, index=True)  # "success", "denied", "failure"
     request_id = Column(String(64), nullable=True)
+    ip_hash = Column(String(64), nullable=True)
+    user_agent_hash = Column(String(64), nullable=True)
     structured_metadata = Column(JSON, nullable=False, default=dict)
     previous_event_hash = Column(String(64), nullable=False)
     event_hash = Column(String(64), nullable=False, index=True)

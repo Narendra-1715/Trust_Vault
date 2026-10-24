@@ -257,7 +257,7 @@ def verify_backup_archive(
             iso_db.flush()
 
             # Populate audit events
-            for a in tables.get("audit_events", []):
+            for idx, a in enumerate(tables.get("audit_events", [])):
                 iso_db.add(AuditEvent(
                     id=a["id"],
                     timestamp=parse_iso_dt(a["timestamp"]),
@@ -269,7 +269,11 @@ def verify_backup_archive(
                     request_id=a.get("request_id"),
                     structured_metadata=a.get("structured_metadata", {}),
                     previous_event_hash=a["previous_event_hash"],
-                    event_hash=a["event_hash"]
+                    event_hash=a["event_hash"],
+                    sequence_number=a.get("sequence_number") if a.get("sequence_number") is not None else (idx + 1),
+                    org_id=a.get("org_id", "default-org"),
+                    ip_hash=a.get("ip_hash"),
+                    user_agent_hash=a.get("user_agent_hash")
                 ))
             iso_db.flush()
 
@@ -435,7 +439,7 @@ def execute_restore(
             ))
         db.flush()
 
-        for a in tables.get("audit_events", []):
+        for idx, a in enumerate(tables.get("audit_events", [])):
             db.add(AuditEvent(
                 id=a["id"],
                 timestamp=parse_iso_dt(a["timestamp"]),
@@ -447,7 +451,11 @@ def execute_restore(
                 request_id=a.get("request_id"),
                 structured_metadata=a.get("structured_metadata", {}),
                 previous_event_hash=a["previous_event_hash"],
-                event_hash=a["event_hash"]
+                event_hash=a["event_hash"],
+                sequence_number=a.get("sequence_number") if a.get("sequence_number") is not None else (idx + 1),
+                org_id=a.get("org_id", "default-org"),
+                ip_hash=a.get("ip_hash"),
+                user_agent_hash=a.get("user_agent_hash")
             ))
         db.flush()
 

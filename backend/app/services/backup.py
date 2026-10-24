@@ -182,7 +182,7 @@ def export_database_records(db: Session) -> Dict[str, Any]:
 
     # 4. Audit Events
     audit_data = []
-    for a in db.query(AuditEvent).order_by(AuditEvent.timestamp.asc()).all():
+    for a in db.query(AuditEvent).order_by(AuditEvent.sequence_number.asc(), AuditEvent.timestamp.asc()).all():
         audit_data.append({
             "id": a.id,
             "timestamp": format_dt(a.timestamp),
@@ -194,7 +194,11 @@ def export_database_records(db: Session) -> Dict[str, Any]:
             "request_id": a.request_id,
             "structured_metadata": a.structured_metadata or {},
             "previous_event_hash": a.previous_event_hash,
-            "event_hash": a.event_hash
+            "event_hash": a.event_hash,
+            "sequence_number": a.sequence_number,
+            "org_id": a.org_id,
+            "ip_hash": a.ip_hash,
+            "user_agent_hash": a.user_agent_hash
         })
 
     # 5. User Sessions
