@@ -19,6 +19,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('General');
+  const [classification, setClassification] = useState('Internal');
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +123,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
       formData.append('file', file);
       formData.append('title', title.trim());
       formData.append('category', category);
+      formData.append('classification', classification);
       if (description.trim()) {
         formData.append('description', description.trim());
       }
@@ -362,6 +364,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSuc
               <option value="Engineering">Engineering</option>
               <option value="HR">HR</option>
               <option value="General">General</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Classification Security Policy</label>
+            <select
+              className="input-field"
+              value={classification}
+              onChange={(e) => setClassification(e.target.value)}
+            >
+              <option value="Internal">Internal (Standard confidentiality)</option>
+              <option value="Confidential">Confidential (Max 90 days grant duration)</option>
+              <option value="Highly Restricted">Highly Restricted (No downloads, Max 7 days, MFA required)</option>
             </select>
           </div>
 

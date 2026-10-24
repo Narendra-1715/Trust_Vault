@@ -17,6 +17,7 @@ class Document(Base):
     file_size = Column(BigInteger, nullable=False)
     checksum = Column(String(64), nullable=False)  # SHA-256
     category = Column(String(50), nullable=False, default="General", index=True)
+    classification = Column(String(50), nullable=False, default="Internal", index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     deleted_at = Column(DateTime, nullable=True, index=True)
@@ -25,8 +26,10 @@ class Document(Base):
     owner = relationship("User", back_populates="owned_documents", foreign_keys=[owner_id])
     permissions = relationship("DocumentPermission", back_populates="document", cascade="all, delete-orphan")
     ai_suggestions = relationship("AIAccessSuggestion", back_populates="document", cascade="all, delete-orphan")
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="desc(DocumentVersion.version_number)")
 
     __table_args__ = (
         Index("ix_documents_owner_deleted", "owner_id", "deleted_at"),
         Index("ix_documents_category_deleted", "category", "deleted_at"),
+        Index("ix_documents_classification_deleted", "classification", "deleted_at"),
     )

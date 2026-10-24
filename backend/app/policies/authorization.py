@@ -41,7 +41,7 @@ class AuthorizationPolicy:
     def can_read_document(cls, db: Session, user: User, document: Document) -> bool:
         """
         Returns True if user is the document owner OR has an active 'read' or 'edit' permission grant.
-        Admins do not automatically have content access unless explicitly granted.
+        Admins do not automatically have content access unless explicitly granted or holding active emergency break-glass access.
         """
         if document.deleted_at is not None:
             return False
@@ -52,6 +52,27 @@ class AuthorizationPolicy:
         perm = cls.get_active_permission(db, document.id, user.id)
         if perm and perm.permission_level in ["read", "edit"]:
             return True
+
+        # Check emergency break-glass access for administrators
+        if user.role == "admin":
+            from app.models.emergency_access import EmergencyAccess
+            now_utc = datetime.now(timezone.utc)
+            active_emergency = db.query(EmergencyAccess).filter(
+                EmergencyAccess.admin_id == user.id,
+                EmergencyAccess.document_id == document.id,
+                EmergencyAccess.status == "active",
+                EmergencyAccess.revoked_at.is_(None)
+            ).first()
+            if active_emergency:
+                exp = active_emergency.expires_at.replace(tzinfo=timezone.utc) if active_emergency.expires_at.tzinfo is None else active_emergency.expires_at
+                if exp > now_utc:
+                    return True
+                else:
+                    active_emergency.status = "expired"
+                    try:
+                        db.commit()
+                    except Exception:
+                        db.rollback()
 
         return False
 

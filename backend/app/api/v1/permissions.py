@@ -12,6 +12,8 @@ from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
+from app.services.detection import detect_burst_permission_changes
+from app.services.classification_policy import get_security_policy, evaluate_grant_proposal
 
 router = APIRouter()
 
@@ -64,7 +66,10 @@ def get_document_permissions(
     Requires read authorization.
     """
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
-    AuthorizationPolicy.require_read(db, current_user, doc)
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if current_user.role != "admin":
+        AuthorizationPolicy.require_read(db, current_user, doc)
 
     query = db.query(DocumentPermission).filter(DocumentPermission.document_id == document_id)
     if not include_revoked:
@@ -119,6 +124,32 @@ def grant_document_permission(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Expiration date must be in the future"
             )
+
+    # Enforce classification security policy
+    policy = get_security_policy(db, doc.classification)
+    eval_result = evaluate_grant_proposal(
+        doc=doc,
+        proposer=current_user,
+        target_user=target_user,
+        permission_level=grant_in.permission_level,
+        expires_at=grant_in.expires_at,
+        policy=policy,
+    )
+    if not eval_result["is_allowed"]:
+        log_audit_event(
+            db=db,
+            action="permission.grant.policy_denied",
+            resource_type="document",
+            resource_id=doc.id,
+            outcome="denied",
+            actor_id=current_user.id,
+            request_id=request_id,
+            metadata={"reason": eval_result["summary"], "classification": doc.classification}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST if "duration" in eval_result["summary"].lower() or "expiration" in eval_result["summary"].lower() or "future" in eval_result["summary"].lower() else status.HTTP_403_FORBIDDEN,
+            detail=eval_result["summary"]
+        )
 
     # Check for existing active or previous permission
     existing_perm = db.query(DocumentPermission).filter(
@@ -186,6 +217,13 @@ def grant_document_permission(
         resource_id=doc.id
     )
 
+    detect_burst_permission_changes(
+        db=db,
+        actor_id=current_user.id,
+        document_id=doc.id,
+        request_id=request_id
+    )
+
     return build_permission_response(perm_record)
 
 @router.delete("/documents/{document_id}/permissions/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -244,4 +282,12 @@ def revoke_document_permission(
             "document_id": document_id
         }
     )
+
+    detect_burst_permission_changes(
+        db=db,
+        actor_id=current_user.id,
+        document_id=doc.id,
+        request_id=request_id
+    )
+
     return None

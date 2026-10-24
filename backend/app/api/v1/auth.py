@@ -15,6 +15,7 @@ from app.schemas.session import SessionResponse, RevokeAllResponse
 from app.api.deps import get_current_user, get_request_id
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
+from app.services.detection import detect_failed_logins, detect_rapid_sessions
 
 router = APIRouter()
 
@@ -31,6 +32,15 @@ def login(
     request_id = get_request_id(request)
     check_rate_limit(request, login_limiter, key_prefix="login")
 
+    # Determine client IP and User Agent early for security detection
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+
+    user_agent = request.headers.get("user-agent", "Unknown")
+    device_info = parse_device_info(user_agent)
+
     # Normalize email to lowercase
     normalized_email = credentials.email.strip().lower()
     user = db.query(User).filter(User.email == normalized_email).first()
@@ -44,8 +54,11 @@ def login(
             outcome="denied",
             actor_id=user.id if user else None,
             request_id=request_id,
-            metadata={"email": normalized_email, "reason": "Invalid credentials"}
+            metadata={"email": normalized_email, "ip_address": client_ip, "reason": "Invalid credentials"}
         )
+        # Check brute force threshold
+        detect_failed_logins(db=db, email=normalized_email, ip_address=client_ip, request_id=request_id)
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -130,6 +143,8 @@ def login(
         event_type="session.created",
         resource_id=new_session.id
     )
+
+    detect_rapid_sessions(db=db, actor_id=user.id, ip_address=client_ip, request_id=request_id)
 
     return TokenResponse(
         access_token=access_token,

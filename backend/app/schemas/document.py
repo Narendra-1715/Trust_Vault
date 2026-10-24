@@ -6,6 +6,7 @@ class DocumentBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
     category: str = Field(default="General", max_length=50)
+    classification: str = Field(default="Internal", max_length=50)
 
 class DocumentCreate(DocumentBase):
     pass
@@ -14,6 +15,7 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
     category: Optional[str] = Field(None, max_length=50)
+    classification: Optional[str] = Field(None, max_length=50)
 
 class DocumentResponse(DocumentBase):
     id: str
@@ -27,6 +29,8 @@ class DocumentResponse(DocumentBase):
     created_at: datetime
     updated_at: datetime
     effective_permission: str  # "owner", "edit", "read", "none"
+    current_version_number: Optional[int] = 1
+    version_count: Optional[int] = 1
 
     model_config = ConfigDict(from_attributes=True)
 

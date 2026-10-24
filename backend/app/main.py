@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, documents, permissions, audit, ai, health, notifications, access_requests
+from app.api.v1 import auth, users, admin, documents, permissions, audit, ai, health, notifications, access_requests, alerts, backups, security_policies, access_reviews, policy_simulator
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -39,10 +39,16 @@ app.add_middleware(
 # Include API v1 Routers
 api_v1 = f"{settings.API_V1_STR}"
 app.include_router(auth.router, prefix=f"{api_v1}/auth", tags=["Authentication"])
+app.include_router(admin.router, prefix=f"{api_v1}/admin", tags=["Administrative Control"])
 app.include_router(users.router, prefix=f"{api_v1}/users", tags=["Users & Administration"])
 app.include_router(documents.router, prefix=f"{api_v1}/documents", tags=["Documents"])
 app.include_router(permissions.router, prefix=f"{api_v1}", tags=["Permissions"])
 app.include_router(notifications.router, prefix=f"{api_v1}/notifications", tags=["Security Alerts"])
+app.include_router(alerts.router, prefix=f"{api_v1}/alerts", tags=["Security Alerts & Incident Response"])
+app.include_router(security_policies.router, prefix=f"{api_v1}/security-policies", tags=["Document Classification & Security Policies"])
+app.include_router(access_reviews.router, prefix=f"{api_v1}/access-reviews", tags=["Periodic Access Reviews"])
+app.include_router(policy_simulator.router, prefix=f"{api_v1}/policy-simulator", tags=["Access Policy Simulator"])
+app.include_router(backups.router, prefix=f"{api_v1}/backups", tags=["Backup & Disaster Recovery"])
 app.include_router(access_requests.router, prefix=f"{api_v1}/access-requests", tags=["Access Requests"])
 app.include_router(ai.router, prefix=f"{api_v1}", tags=["AI Access Recommendations"])
 app.include_router(audit.router, prefix=f"{api_v1}/audit", tags=["Audit & Integrity"])

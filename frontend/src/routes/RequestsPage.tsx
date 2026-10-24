@@ -12,7 +12,10 @@ import {
   X, 
   ArrowRight,
   ShieldCheck,
-  Link2
+  Link2,
+  RotateCcw,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatToIST } from '../lib/date';
@@ -25,7 +28,9 @@ export const RequestsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'incoming' | 'my'>('incoming');
+  const [activeTab, setActiveTab] = useState<'incoming' | 'my' | 'reviews'>('incoming');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | 'pending' | 'retained' | 'revoked'>('pending');
+  const [reviewNotes, setReviewNotes] = useState<{ [key: string]: string }>({});
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'cancelled'>('pending');
 
   // Redeem Link Modal State
@@ -95,6 +100,35 @@ export const RequestsPage: React.FC = () => {
     queryKey: ['myAccessRequests'],
     queryFn: () => api.getMyAccessRequests(),
   });
+
+  const { data: accessReviewsData, isLoading: isReviewsLoading, refetch: refetchReviews } = useQuery({
+    queryKey: ['access-reviews', reviewStatusFilter],
+    queryFn: () => api.listAccessReviews({ status_filter: reviewStatusFilter === 'all' ? undefined : reviewStatusFilter }),
+  });
+
+  const handleReviewDecision = async (reviewId: string, decision: 'retain' | 'revoke') => {
+    try {
+      await api.submitAccessReviewDecision(reviewId, {
+        decision,
+        decision_notes: reviewNotes[reviewId] || undefined,
+      });
+      toast.success(decision === 'retain' ? 'Access grant retained successfully' : 'Access grant revoked');
+      refetchReviews();
+      queryClient.invalidateQueries({ queryKey: ['access-reviews'] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit review decision');
+    }
+  };
+
+  const handleRunReviewScan = async () => {
+    try {
+      const res = await api.generateAccessReviews(true);
+      toast.success(`Access review scan completed: ${res.created_count} review(s) queued.`);
+      refetchReviews();
+    } catch (err: any) {
+      toast.error(err.message || 'Review scan failed');
+    }
+  };
 
   const pendingIncomingCount = incomingRequests?.filter(r => r.status === 'pending').length || 0;
 
@@ -343,6 +377,40 @@ export const RequestsPage: React.FC = () => {
               borderRadius: '10px',
             }}>
               {myRequests.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reviews')}
+          style={{
+            padding: '0.625rem 1rem',
+            fontSize: '0.875rem',
+            fontWeight: activeTab === 'reviews' ? 600 : 500,
+            color: activeTab === 'reviews' ? 'var(--graphite)' : 'var(--text-secondary)',
+            borderBottom: `2px solid ${activeTab === 'reviews' ? 'var(--copper)' : 'transparent'}`,
+            background: 'none',
+            borderTop: 'none',
+            borderLeft: 'none',
+            borderRight: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <span>Periodic Access Reviews</span>
+          {accessReviewsData && accessReviewsData.pending_count > 0 && (
+            <span style={{
+              backgroundColor: accessReviewsData.overdue_count > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(217, 154, 103, 0.15)',
+              color: accessReviewsData.overdue_count > 0 ? '#b91c1c' : 'var(--copper-dark)',
+              border: `1px solid ${accessReviewsData.overdue_count > 0 ? 'rgba(239, 68, 68, 0.3)' : 'var(--copper)'}`,
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              padding: '0.125rem 0.45rem',
+              borderRadius: '10px',
+            }}>
+              {accessReviewsData.pending_count} due
             </span>
           )}
         </button>
@@ -661,6 +729,172 @@ export const RequestsPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 3: Periodic Access Reviews */}
+      {activeTab === 'reviews' && (
+        <div>
+          {/* Header & Scan Button */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1rem',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Filter:
+              </span>
+              {(['pending', 'all', 'retained', 'revoked'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setReviewStatusFilter(st)}
+                  className={`btn btn-sm ${reviewStatusFilter === st ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    padding: '0.25rem 0.65rem',
+                    fontSize: '0.75rem',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleRunReviewScan}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.75rem' }}
+            >
+              <RotateCcw size={13} />
+              <span>Scan for Due Reviews</span>
+            </button>
+          </div>
+
+          {/* Reviews Table */}
+          {isReviewsLoading ? (
+            <div className="panel" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Loading access reviews...
+            </div>
+          ) : !accessReviewsData?.reviews || accessReviewsData.reviews.length === 0 ? (
+            <div className="panel" style={{ padding: '3rem', textAlign: 'center' }}>
+              <ShieldCheck size={36} color="var(--copper-dark)" style={{ margin: '0 auto 0.75rem' }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                Zero Pending Access Reviews
+              </h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0.25rem auto 1rem' }}>
+                All document grants are compliant with periodic access review policies. Click "Scan for Due Reviews" to trigger a compliance check across active grants.
+              </p>
+            </div>
+          ) : (
+            <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Grantee</th>
+                      <th>Scope</th>
+                      <th>Review Due (IST)</th>
+                      <th>Status</th>
+                      <th>Decision Notes</th>
+                      <th style={{ textAlign: 'right' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessReviewsData.reviews.map((rev) => (
+                      <tr key={rev.id} style={{ backgroundColor: rev.is_overdue ? 'rgba(239, 68, 68, 0.04)' : undefined }}>
+                        <td>
+                          <Link to={`/documents/${rev.document_id}`} style={{ fontWeight: 600, color: 'var(--graphite)', textDecoration: 'none' }}>
+                            {rev.document_title}
+                          </Link>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{rev.grantee_name || rev.grantee_email}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{rev.grantee_email}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-gray" style={{ textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                            {rev.permission_level}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                            {formatToIST(rev.due_date)}
+                          </div>
+                          {rev.is_overdue && (
+                            <span className="badge badge-danger" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', marginTop: '0.2rem' }}>
+                              Overdue
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            rev.status === 'pending'
+                              ? 'badge-copper'
+                              : rev.status === 'retained'
+                                ? 'badge-green'
+                                : 'badge-danger'
+                          }`} style={{ textTransform: 'capitalize' }}>
+                            {rev.status}
+                          </span>
+                        </td>
+                        <td>
+                          {rev.status === 'pending' ? (
+                            <input
+                              type="text"
+                              className="input-field"
+                              placeholder="Review rationale / justification..."
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', minWidth: '160px' }}
+                              value={reviewNotes[rev.id] || ''}
+                              onChange={(e) => setReviewNotes(prev => ({ ...prev, [rev.id]: e.target.value }))}
+                            />
+                          ) : (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              {rev.decision_notes || (rev.decided_at ? `Decided on ${formatToIST(rev.decided_at)}` : '-')}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {rev.status === 'pending' ? (
+                            <div style={{ display: 'inline-flex', gap: '0.375rem', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={() => handleReviewDecision(rev.id, 'retain')}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                title="Confirm continued access for next interval"
+                              >
+                                <UserCheck size={12} />
+                                <span>Retain</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleReviewDecision(rev.id, 'revoke')}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                title="Revoke this grant immediately"
+                              >
+                                <UserX size={12} />
+                                <span>Revoke</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {rev.decision === 'retain' ? 'Retained' : 'Revoked'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

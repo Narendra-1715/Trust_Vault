@@ -10,6 +10,7 @@ import { DocumentsPage } from './routes/DocumentsPage';
 import { DocumentDetailPage } from './routes/DocumentDetailPage';
 import { AuditPage } from './routes/AuditPage';
 import { AdminPage } from './routes/AdminPage';
+import { SecurityAlertsPage } from './routes/SecurityAlertsPage';
 import { RequestsPage } from './routes/RequestsPage';
 import { RequestAccessLandingPage } from './routes/RequestAccessLandingPage';
 import { PrivacyPage } from './routes/PrivacyPage';
@@ -79,6 +80,12 @@ export const App: React.FC = () => {
                 <Route path="request-access/:token" element={
                   <ProtectedRoute>
                     <RequestAccessLandingPage />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="admin/alerts" element={
+                  <ProtectedRoute>
+                    <SecurityAlertsPage />
                   </ProtectedRoute>
                 } />
 

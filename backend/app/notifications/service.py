@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.notification import SecurityNotification
 from app.models.audit import AuditEvent
+from app.services.detection import detect_repeated_denials
 
 def create_security_notification(
     db: Session,
@@ -71,6 +72,13 @@ def check_and_notify_repeated_denials(
                 severity="danger",
                 event_type="security.denial.threshold",
                 resource_id=resource_id
+            )
+            # Trigger central administrative SecurityAlert
+            detect_repeated_denials(
+                db=db,
+                actor_id=user_id,
+                document_id=resource_id,
+                document_title=resource_title
             )
             return alert
 

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: Optional[str] = None
     S3_REGION_NAME: Optional[str] = "us-east-1"
     MAX_FILE_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB
+
+    # Backup & Disaster Recovery
+    BACKUP_DIR: str = "./data/backups"
+    BACKUP_ENCRYPTION_KEY: Optional[str] = None
+    BACKUP_RETENTION_COUNT: int = 14
     ALLOWED_EXTENSIONS: List[str] = [
         "pdf", "docx", "xlsx", "pptx", "txt", "csv", "json", "md", "png", "jpg", "jpeg"
     ]

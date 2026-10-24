@@ -2,6 +2,8 @@ import type {
   User, 
   DocumentItem, 
   DocumentListResponse, 
+  DocumentVersionItem,
+  DocumentVersionListResponse,
   DocumentPermission, 
   AuditEvent, 
   AuditVerificationReport,
@@ -17,7 +19,24 @@ import type {
   RequestLinkCreatedResponse,
   RequestLinkListItem,
   RequestLinkResolved,
-  RequestLinkSubmit
+  RequestLinkSubmit,
+  AdminSecurityAlert,
+  SecurityAlertMetrics,
+  SecurityAlertListResponse,
+  BackupListResponse,
+  RestoreVerificationReport,
+  SecurityPolicy,
+  SecurityPolicyUpdate,
+  AccessReviewItem,
+  AccessReviewListResponse,
+  PolicySimulationRequest,
+  PolicySimulationResponse,
+  SystemStatusResponse,
+  SystemSettingItem,
+  BreakGlassRequest,
+  BreakGlassResponse,
+  AdminUserCreateRequest,
+  AdminUserDetailResponse
 } from '../types';
 
 // Dynamically resolve API URL with automated protocol & domain handling for cloud hosting (Render/Vercel)
@@ -262,7 +281,7 @@ export const api = {
     return response.blob();
   },
 
-  updateDocumentMetadata: (id: string, data: { title?: string; description?: string; category?: string }) =>
+  updateDocumentMetadata: (id: string, data: { title?: string; description?: string; category?: string; classification?: string }) =>
     request<DocumentItem>(`/documents/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -271,6 +290,109 @@ export const api = {
   deleteDocument: (id: string) =>
     request<void>(`/documents/${id}`, {
       method: 'DELETE',
+    }),
+
+  // Document Versions
+  getDocumentVersions: (documentId: string) =>
+    request<DocumentVersionListResponse>(`/documents/${documentId}/versions`),
+
+  uploadDocumentVersion: async (documentId: string, formData: FormData) => {
+    return request<DocumentVersionItem>(`/documents/${documentId}/versions`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  downloadDocumentVersion: async (documentId: string, versionId: string, originalFilename: string) => {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE}/documents/${documentId}/versions/${versionId}/download`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        clearAuthToken();
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login?expired=true';
+        }
+        throw new ApiError('Session expired. Please sign in again.', 401);
+      }
+      let errorMsg = 'Failed to download document version';
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch {
+        /* ignore parse error */
+      }
+      throw new ApiError(errorMsg, response.status);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = originalFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  restoreDocumentVersion: (documentId: string, versionId: string) =>
+    request<DocumentVersionItem>(`/documents/${documentId}/versions/${versionId}/restore`, {
+      method: 'POST',
+    }),
+
+  // Security Policies & Document Classification
+  listSecurityPolicies: () =>
+    request<SecurityPolicy[]>('/security-policies'),
+
+  updateSecurityPolicy: (classification: string, data: SecurityPolicyUpdate) =>
+    request<SecurityPolicy>(`/security-policies/${encodeURIComponent(classification)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updateDocumentClassification: (documentId: string, classification: string, reason?: string) =>
+    request<DocumentItem>(`/security-policies/documents/${documentId}/classification`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classification, reason }),
+    }),
+
+  toggleUserMfa: (userId: string, enabled: boolean) =>
+    request<{ user_id: string; mfa_enabled: boolean }>(`/security-policies/users/${userId}/mfa?enabled=${enabled}`, {
+      method: 'PATCH',
+    }),
+
+  // Periodic Access Reviews
+  listAccessReviews: (params?: { status_filter?: string; document_id?: string; all_org?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status_filter && params.status_filter !== 'all') searchParams.append('status_filter', params.status_filter);
+    if (params?.document_id) searchParams.append('document_id', params.document_id);
+    if (params?.all_org) searchParams.append('all_org', 'true');
+    return request<AccessReviewListResponse>(`/access-reviews?${searchParams.toString()}`);
+  },
+
+  generateAccessReviews: (forceAllActive?: boolean) => {
+    return request<{ message: string; created_count: number }>(`/access-reviews/generate${forceAllActive ? '?force_all_active=true' : ''}`, {
+      method: 'POST',
+    });
+  },
+
+  submitAccessReviewDecision: (reviewId: string, data: { decision: 'retain' | 'revoke'; decision_notes?: string }) => {
+    return request<AccessReviewItem>(`/access-reviews/${reviewId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Access Policy Simulator
+  simulatePolicy: (data: PolicySimulationRequest) =>
+    request<PolicySimulationResponse>('/policy-simulator/simulate', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
   // Permissions
@@ -431,6 +553,105 @@ export const api = {
 
   submitAccessRequestViaLink: (token: string, data: RequestLinkSubmit) =>
     request<AccessRequest>(`/access-requests/submit-via-link/${token}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listSecurityAlerts: (params?: { severity?: string; status?: string; event_type?: string; skip?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.severity) q.append('severity', params.severity);
+    if (params?.status) q.append('status', params.status);
+    if (params?.event_type) q.append('event_type', params.event_type);
+    if (params?.skip !== undefined) q.append('skip', String(params.skip));
+    if (params?.limit !== undefined) q.append('limit', String(params.limit));
+    const qs = q.toString();
+    return request<SecurityAlertListResponse>(qs ? `/alerts?${qs}` : '/alerts');
+  },
+
+  getSecurityAlertMetrics: () =>
+    request<SecurityAlertMetrics>('/alerts/metrics'),
+
+  getSecurityAlertDetails: (alertId: string) =>
+    request<AdminSecurityAlert>(`/alerts/${alertId}`),
+
+  acknowledgeSecurityAlert: (alertId: string) =>
+    request<AdminSecurityAlert>(`/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+    }),
+
+  resolveSecurityAlert: (alertId: string, resolutionNotes: string) =>
+    request<AdminSecurityAlert>(`/alerts/${alertId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution_notes: resolutionNotes }),
+    }),
+
+  revokeUserSessionsForAlert: (alertId: string) =>
+    request<{ revoked_sessions_count: number; message: string }>(`/alerts/${alertId}/revoke-sessions`, {
+      method: 'POST',
+    }),
+
+  listBackups: () =>
+    request<BackupListResponse>('/backups'),
+
+  createBackup: () =>
+    request<{ backup_id: string; message: string; filename: string; size_bytes: number; created_at: string }>('/backups/create', {
+      method: 'POST',
+    }),
+
+  verifyBackupHealth: (backupId: string) =>
+    request<RestoreVerificationReport>(`/backups/${backupId}/verify`, {
+      method: 'POST',
+    }),
+
+  // Full Administrative Control & Break-Glass
+  getSystemStatus: () => request<SystemStatusResponse>('/admin/system-status'),
+
+  listSystemSettings: () => request<SystemSettingItem[]>('/admin/settings'),
+
+  updateSystemSetting: (key: string, value: string) =>
+    request<SystemSettingItem>(`/admin/settings/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ value }),
+    }),
+
+  listBreakGlassAccesses: () => request<BreakGlassResponse[]>('/admin/break-glass'),
+
+  activateBreakGlass: (data: BreakGlassRequest) =>
+    request<BreakGlassResponse>('/admin/break-glass', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  revokeBreakGlass: (id: string) =>
+    request<BreakGlassResponse>(`/admin/break-glass/${id}/revoke`, {
+      method: 'POST',
+    }),
+
+  reviewBreakGlass: (id: string, reviewNotes: string) =>
+    request<BreakGlassResponse>(`/admin/break-glass/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ review_notes: reviewNotes }),
+    }),
+
+  createAdminUser: (data: AdminUserCreateRequest) =>
+    request<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getAdminUserDetail: (userId: string) =>
+    request<AdminUserDetailResponse>(`/users/${userId}`),
+
+  listUserSessionsAdmin: (userId: string) =>
+    request<UserSession[]>(`/users/${userId}/sessions`),
+
+  revokeAllUserSessionsAdmin: (userId: string) =>
+    request<{ message: string; revoked_count: number }>(`/users/${userId}/sessions`, {
+      method: 'DELETE',
+    }),
+
+  restoreBackup: (backupId: string, data: { confirmation: string; password: string }) =>
+    request<{ success: boolean; backup_id: string; restored_files_count: number; message: string }>(`/backups/${backupId}/restore`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

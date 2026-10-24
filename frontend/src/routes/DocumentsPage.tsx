@@ -481,7 +481,20 @@ export const DocumentsPage: React.FC = () => {
                     </div>
                   </td>
                   <td>
-                    <span className="badge badge-gray">{doc.category}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                      <span className="badge badge-gray">{doc.category}</span>
+                      {doc.classification && (
+                        <span className={`badge ${
+                          doc.classification === 'Highly Restricted' 
+                            ? 'badge-danger' 
+                            : doc.classification === 'Confidential' 
+                              ? 'badge-copper' 
+                              : 'badge-secondary'
+                        }`} style={{ fontSize: '0.675rem', padding: '0.1rem 0.35rem' }}>
+                          {doc.classification}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>

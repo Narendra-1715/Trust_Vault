@@ -29,6 +29,7 @@ from app.api.deps import get_current_user, get_request_id
 from app.policies.authorization import AuthorizationPolicy
 from app.audit.service import log_audit_event
 from app.notifications.service import create_security_notification
+from app.services.detection import detect_invalid_reference_probes, detect_cross_owner_probes
 
 router = APIRouter()
 
@@ -653,6 +654,26 @@ def create_document_request_link(
         Document.id == document_id,
         Document.deleted_at.is_(None)
     ).first()
+
+    if doc and doc.owner_id != current_user.id:
+        req_id = get_request_id(request)
+        log_audit_event(
+            db=db,
+            action="request_link.create",
+            resource_type="document",
+            resource_id=doc.id,
+            outcome="denied",
+            actor_id=current_user.id,
+            request_id=req_id,
+            metadata={"reason": "Unauthorized non-owner link creation probe"}
+        )
+        detect_cross_owner_probes(
+            db=db,
+            actor_id=current_user.id,
+            target_document_id=doc.id,
+            request_id=req_id
+        )
+
     AuthorizationPolicy.require_owner(db, current_user, doc)
 
     now_utc = datetime.now(timezone.utc)
@@ -731,6 +752,26 @@ def list_document_request_links(
         Document.id == document_id,
         Document.deleted_at.is_(None)
     ).first()
+
+    if doc and doc.owner_id != current_user.id:
+        req_id = get_request_id(request)
+        log_audit_event(
+            db=db,
+            action="request_link.create",
+            resource_type="document",
+            resource_id=doc.id,
+            outcome="denied",
+            actor_id=current_user.id,
+            request_id=req_id,
+            metadata={"reason": "Unauthorized non-owner link creation probe"}
+        )
+        detect_cross_owner_probes(
+            db=db,
+            actor_id=current_user.id,
+            target_document_id=doc.id,
+            request_id=req_id
+        )
+
     AuthorizationPolicy.require_owner(db, current_user, doc)
 
     links = db.query(DocumentRequestLink).filter(
@@ -809,17 +850,27 @@ def resolve_request_link(
         DocumentRequestLink.token_hash == token_hash
     ).first()
 
-    if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid or expired request access link"
+    def fail_resolution(reason: str, status_code: int):
+        log_audit_event(
+            db=db,
+            action="request_link.resolve_failed",
+            resource_type="request_link",
+            outcome="denied",
+            actor_id=current_user.id,
+            metadata={"reason": reason, "token_prefix": token_clean[:8]}
         )
+        detect_invalid_reference_probes(
+            db=db,
+            actor_id=current_user.id,
+            token_prefix=token_clean[:8]
+        )
+        raise HTTPException(status_code=status_code, detail=reason)
+
+    if not link:
+        fail_resolution("Invalid or expired request access link", status.HTTP_404_NOT_FOUND)
 
     if link.revoked_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="This request link has been revoked by the document owner"
-        )
+        fail_resolution("This request link has been revoked by the document owner", status.HTTP_410_GONE)
 
     now_utc = datetime.now(timezone.utc)
     if link.expires_at is not None:
@@ -827,16 +878,10 @@ def resolve_request_link(
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=timezone.utc)
         if exp <= now_utc:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="This request link has expired"
-            )
+            fail_resolution("This request link has expired", status.HTTP_410_GONE)
 
     if link.max_uses is not None and link.use_count >= link.max_uses:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="This request link has reached its maximum permitted uses"
-        )
+        fail_resolution("This request link has reached its maximum permitted uses", status.HTTP_410_GONE)
 
     doc = db.query(Document).filter(
         Document.id == link.document_id,

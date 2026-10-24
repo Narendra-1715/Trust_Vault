@@ -13,6 +13,7 @@ class User(Base):
     display_name = Column(String(100), nullable=False)
     role = Column(String(30), nullable=False, default="owner")  # admin, owner, viewer
     is_active = Column(Boolean, default=True, nullable=False)
+    mfa_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 

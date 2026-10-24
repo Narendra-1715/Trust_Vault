@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../features/auth/AuthContext';
-import { Shield, FileText, Activity, Users, LogOut, Lock, Laptop, KeyRound } from 'lucide-react';
+import { Shield, FileText, Activity, Users, LogOut, Lock, Laptop, KeyRound, ShieldAlert } from 'lucide-react';
 import { SessionManagementModal } from '../features/auth/SessionManagementModal';
 import { NotificationBell } from '../features/notifications/NotificationBell';
 import { api } from '../lib/api';
@@ -20,6 +20,14 @@ export const AppLayout: React.FC = () => {
     refetchInterval: 15000,
   });
   const pendingCount = pendingRequests?.length || 0;
+
+  const { data: alertMetrics } = useQuery({
+    queryKey: ['securityAlertMetricsNav'],
+    queryFn: () => api.getSecurityAlertMetrics(),
+    enabled: isAuthenticated && user?.role === 'admin',
+    refetchInterval: 15000,
+  });
+  const openAlertsCount = alertMetrics?.open_alerts || 0;
 
   const handleSignOut = () => {
     logout();
@@ -176,25 +184,60 @@ export const AppLayout: React.FC = () => {
                 </Link>
 
                 {user?.role === 'admin' && (
-                  <Link
-                    to="/admin"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.375rem',
-                      padding: '0.375rem 0.75rem',
-                      fontSize: '0.8125rem',
-                      fontWeight: isActive('/admin') ? 600 : 500,
-                      color: isActive('/admin') ? 'var(--graphite)' : 'var(--text-secondary)',
-                      backgroundColor: isActive('/admin') ? 'var(--copper-light)' : 'transparent',
-                      border: `1px solid ${isActive('/admin') ? 'var(--copper-border)' : 'transparent'}`,
-                      borderRadius: 'var(--radius-sm)',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <Users size={15} color={isActive('/admin') ? 'var(--copper-dark)' : 'currentColor'} />
-                    <span>Admin</span>
-                  </Link>
+                  <>
+                    <Link
+                      to="/admin/alerts"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.375rem',
+                        padding: '0.375rem 0.75rem',
+                        fontSize: '0.8125rem',
+                        fontWeight: isActive('/admin/alerts') ? 600 : 500,
+                        color: isActive('/admin/alerts') ? 'var(--graphite)' : 'var(--text-secondary)',
+                        backgroundColor: isActive('/admin/alerts') ? 'var(--copper-light)' : 'transparent',
+                        border: `1px solid ${isActive('/admin/alerts') ? 'var(--copper-border)' : 'transparent'}`,
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <ShieldAlert size={15} color={isActive('/admin/alerts') ? 'var(--copper-dark)' : 'currentColor'} />
+                      <span>Security Alerts</span>
+                      {openAlertsCount > 0 && (
+                        <span style={{
+                          backgroundColor: '#B91C1C',
+                          color: '#FFFFFF',
+                          fontSize: '0.625rem',
+                          fontWeight: 700,
+                          padding: '0.0625rem 0.375rem',
+                          borderRadius: '10px',
+                          lineHeight: 1.3,
+                        }}>
+                          {openAlertsCount}
+                        </span>
+                      )}
+                    </Link>
+
+                    <Link
+                      to="/admin"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.375rem',
+                        padding: '0.375rem 0.75rem',
+                        fontSize: '0.8125rem',
+                        fontWeight: isActive('/admin') && !isActive('/admin/alerts') ? 600 : 500,
+                        color: isActive('/admin') && !isActive('/admin/alerts') ? 'var(--graphite)' : 'var(--text-secondary)',
+                        backgroundColor: isActive('/admin') && !isActive('/admin/alerts') ? 'var(--copper-light)' : 'transparent',
+                        border: `1px solid ${isActive('/admin') && !isActive('/admin/alerts') ? 'var(--copper-border)' : 'transparent'}`,
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Users size={15} color={isActive('/admin') && !isActive('/admin/alerts') ? 'var(--copper-dark)' : 'currentColor'} />
+                      <span>Admin</span>
+                    </Link>
+                  </>
                 )}
               </nav>
             )}

@@ -20,14 +20,22 @@ import {
   FileCode,
   Link2,
   Plus,
-  Ban
+  Ban,
+  Layers,
+  UploadCloud,
+  RotateCcw,
+  Sliders,
+  AlertTriangle,
+  XCircle,
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { api, clearAuthToken } from '../lib/api';
 import { formatToIST } from '../lib/date';
 import { useAuth } from '../features/auth/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ConfirmModal } from '../features/common/ConfirmModal';
-import type { SuggestedGrant, RequestLinkListItem, RequestLinkCreatedResponse } from '../types';
+import type { SuggestedGrant, RequestLinkListItem, RequestLinkCreatedResponse, PolicySimulationResponse } from '../types';
 
 export const DocumentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -36,11 +44,18 @@ export const DocumentDetailPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'permissions' | 'ai' | 'audit' | 'links'>('permissions');
+  const [activeTab, setActiveTab] = useState<'permissions' | 'versions' | 'ai' | 'audit' | 'links'>('permissions');
+
+  // Version management state
+  const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
+  const [newVersionSummary, setNewVersionSummary] = useState('');
+  const [isUploadingVersion, setIsUploadingVersion] = useState(false);
+  const [copiedVersionChecksum, setCopiedVersionChecksum] = useState<string | null>(null);
   const [isEditingMeta, setIsEditingMeta] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editCat, setEditCat] = useState('');
+  const [editClassification, setEditClassification] = useState('Internal');
   const [copiedChecksum, setCopiedChecksum] = useState(false);
 
   // Permission grant form state
@@ -49,6 +64,16 @@ export const DocumentDetailPage: React.FC = () => {
   const [expiryPreset, setExpiryPreset] = useState<'never' | '1h' | '24h' | '7d' | '30d' | 'custom'>('never');
   const [customExpiryDate, setCustomExpiryDate] = useState('');
   const [grantError, setGrantError] = useState<string | null>(null);
+
+  // Access Policy Simulator state
+  const [showSimulator, setShowSimulator] = useState(false);
+  const [simUserEmail, setSimUserEmail] = useState('');
+  const [simPermLevel, setSimPermLevel] = useState<'read' | 'edit'>('read');
+  const [simExpiryPreset, setSimExpiryPreset] = useState<'never' | '1h' | '24h' | '7d' | '30d' | 'custom'>('7d');
+  const [simCustomExpiry, setSimCustomExpiry] = useState('');
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<PolicySimulationResponse | null>(null);
+  const [simError, setSimError] = useState<string | null>(null);
 
   // In-App Confirmation Modal state
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -122,6 +147,12 @@ export const DocumentDetailPage: React.FC = () => {
   const { data: auditEvents } = useQuery({
     queryKey: ['docAudit', id],
     queryFn: () => api.listAuditEvents({ document_id: id }),
+    enabled: !!id,
+  });
+
+  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+    queryKey: ['document-versions', id],
+    queryFn: () => api.getDocumentVersions(id!),
     enabled: !!id,
   });
 
@@ -301,6 +332,7 @@ export const DocumentDetailPage: React.FC = () => {
     setEditTitle(doc.title);
     setEditDesc(doc.description || '');
     setEditCat(doc.category);
+    setEditClassification(doc.classification || 'Internal');
     setIsEditingMeta(true);
   };
 
@@ -312,6 +344,7 @@ export const DocumentDetailPage: React.FC = () => {
         title: editTitle,
         description: editDesc,
         category: editCat,
+        classification: (isOwner || user?.role === 'admin') ? editClassification : undefined,
       });
       setIsEditingMeta(false);
       queryClient.invalidateQueries({ queryKey: ['document', id] });
@@ -343,6 +376,130 @@ export const DocumentDetailPage: React.FC = () => {
         }
       }
     });
+  };
+
+  // Handle Document Versions
+  const handleUploadVersion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVersionFile || !id) return;
+
+    setIsUploadingVersion(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', newVersionFile);
+      if (newVersionSummary.trim()) {
+        formData.append('change_summary', newVersionSummary.trim());
+      }
+      await api.uploadDocumentVersion(id, formData);
+      toast.success('New document revision uploaded successfully');
+      setNewVersionFile(null);
+      setNewVersionSummary('');
+      queryClient.invalidateQueries({ queryKey: ['document', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
+      queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload revision');
+    } finally {
+      setIsUploadingVersion(false);
+    }
+  };
+
+  const handleDownloadVersion = async (versionId: string, filename: string) => {
+    if (!id) return;
+    try {
+      toast.info(`Preparing version download for ${filename}...`);
+      await api.downloadDocumentVersion(id, versionId, filename);
+      toast.success('Version download initiated');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download version');
+    }
+  };
+
+  const handleRestoreVersion = (versionId: string, versionNumber: number) => {
+    if (!id) return;
+    setConfirmConfig({
+      isOpen: true,
+      title: `Restore Version ${versionNumber}`,
+      message: `Are you sure you want to restore version ${versionNumber}? This will create a new current version from its content without altering historical versions.`,
+      confirmLabel: 'Restore to Current',
+      variant: 'warning',
+      isLoading: false,
+      action: async () => {
+        try {
+          await api.restoreDocumentVersion(id, versionId);
+          toast.success(`Successfully restored version ${versionNumber} as new current version`);
+          queryClient.invalidateQueries({ queryKey: ['document', id] });
+          queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
+          queryClient.invalidateQueries({ queryKey: ['docAudit', id] });
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to restore version');
+        }
+      }
+    });
+  };
+
+  // Access Policy Simulation Handler
+  const handleRunSimulation = async (targetEmail?: string, targetPerm?: 'read' | 'edit', targetPreset?: string, targetCustomDate?: string) => {
+    if (!doc) return;
+    const email = targetEmail !== undefined ? targetEmail : simUserEmail;
+    const perm = targetPerm || simPermLevel;
+    const preset = targetPreset || simExpiryPreset;
+    const customDate = targetCustomDate !== undefined ? targetCustomDate : simCustomExpiry;
+
+    if (!email) {
+      setSimError('Please select a recipient user to simulate.');
+      setShowSimulator(true);
+      return;
+    }
+    setSimError(null);
+    setIsSimulating(true);
+    setShowSimulator(true);
+
+    let expiresAtIso: string | undefined = undefined;
+    if (preset === '1h') {
+      expiresAtIso = new Date(Date.now() + 3600 * 1000).toISOString();
+    } else if (preset === '24h') {
+      expiresAtIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    } else if (preset === '7d') {
+      expiresAtIso = new Date(Date.now() + 7 * 86400 * 1000).toISOString();
+    } else if (preset === '30d') {
+      expiresAtIso = new Date(Date.now() + 30 * 86400 * 1000).toISOString();
+    } else if (preset === 'custom' && customDate) {
+      expiresAtIso = new Date(customDate).toISOString();
+    }
+
+    try {
+      const res = await api.simulatePolicy({
+        document_id: doc.id,
+        recipient_email: email,
+        permission_level: perm,
+        proposed_expiry: expiresAtIso,
+      });
+      setSimResult(res);
+      setSimUserEmail(email);
+      setSimPermLevel(perm);
+      setSimExpiryPreset(preset as any);
+      if (customDate) setSimCustomExpiry(customDate);
+    } catch (err: any) {
+      setSimError(err.message || 'Policy simulation failed');
+      toast.error(err.message || 'Policy simulation failed');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleApplySimToGrant = () => {
+    if (!simResult) return;
+    if (simResult.recipient_email) {
+      setSelectedUserEmail(simResult.recipient_email);
+    }
+    setSelectedPermLevel(simResult.proposed_permission as 'read' | 'edit');
+    setExpiryPreset(simExpiryPreset);
+    if (simExpiryPreset === 'custom') {
+      setCustomExpiryDate(simCustomExpiry);
+    }
+    toast.success('Simulated parameters copied to Grant Access form.');
   };
 
   // Handle Grant Permission
@@ -553,6 +710,16 @@ export const DocumentDetailPage: React.FC = () => {
               }`} style={{ textTransform: 'capitalize' }}>
                 {doc.effective_permission === 'owner' ? 'Document Owner' : `${doc.effective_permission} Access`}
               </span>
+              <span className={`badge ${
+                doc.classification === 'Highly Restricted' 
+                  ? 'badge-danger' 
+                  : doc.classification === 'Confidential' 
+                    ? 'badge-copper' 
+                    : 'badge-secondary'
+              }`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+                <Shield size={12} />
+                <span>{doc.classification || 'Internal'}</span>
+              </span>
             </div>
 
             {doc.description ? (
@@ -565,6 +732,27 @@ export const DocumentDetailPage: React.FC = () => {
               </p>
             )}
           </div>
+
+            {doc.classification === 'Highly Restricted' && (
+              <div style={{
+                width: '100%',
+                marginTop: '0.75rem',
+                padding: '0.625rem 0.875rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8125rem',
+                color: '#b91c1c',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <Shield size={14} />
+                <span>
+                  <strong>Highly Restricted Policy:</strong> Direct downloads prohibited for non-owners (use Secure Preview). Max grant duration 7 days. MFA required.
+                </span>
+              </div>
+            )}
 
           {/* Action Buttons Group */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -711,6 +899,26 @@ export const DocumentDetailPage: React.FC = () => {
         >
           <Users size={15} color={activeTab === 'permissions' ? 'var(--copper-dark)' : 'currentColor'} />
           <span>Sharing &amp; Permissions ({permissions?.length || 0})</span>
+        </button>
+
+        <button
+          className="btn btn-sm"
+          onClick={() => setActiveTab('versions')}
+          style={{
+            borderBottom: activeTab === 'versions' ? '2px solid var(--copper)' : '2px solid transparent',
+            borderRadius: '0',
+            padding: '0.625rem 1rem',
+            fontWeight: activeTab === 'versions' ? 600 : 500,
+            color: activeTab === 'versions' ? 'var(--graphite)' : 'var(--text-secondary)',
+            backgroundColor: activeTab === 'versions' ? 'rgba(217, 154, 103, 0.08)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Layers size={15} color={activeTab === 'versions' ? 'var(--copper-dark)' : 'currentColor'} />
+          <span>Version History ({versionsData?.total || doc?.version_count || 1})</span>
         </button>
 
         <button
@@ -864,11 +1072,309 @@ export const DocumentDetailPage: React.FC = () => {
                   </div>
                 )}
 
-                <button type="submit" className="btn btn-primary" style={{ height: '38px', padding: '0 1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ height: '38px', padding: '0 0.875rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                    onClick={() => handleRunSimulation(selectedUserEmail, selectedPermLevel, expiryPreset, customExpiryDate)}
+                    disabled={!selectedUserEmail || isSimulating}
+                    title="Simulate this proposed grant against current security policies"
+                  >
+                    <Sliders size={14} color="var(--copper-dark)" />
+                    <span>{isSimulating ? 'Simulating...' : 'Simulate First'}</span>
+                  </button>
+
+                  <button type="submit" className="btn btn-primary" style={{ height: '38px', padding: '0 1rem' }}>
                   <Key size={14} color="var(--copper)" />
                   <span>Grant Access</span>
                 </button>
+                </div>
               </form>
+            </div>
+          )}
+
+          {/* Access Policy Simulator Workbench */}
+          {(isOwner || user?.role === 'admin') && (
+            <div className="panel" style={{ padding: '1.25rem', border: '1px solid var(--border)', backgroundColor: 'var(--bg-surface)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Sliders size={18} color="var(--copper-dark)" />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                        Access Policy Simulator
+                      </h3>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.6875rem' }}>Read-Only Sandbox</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.125rem 0 0 0' }}>
+                      Test proposed grants or policy evaluations without mutating database state or creating real permissions.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowSimulator(!showSimulator)}
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  {showSimulator ? 'Collapse Simulator' : 'Expand Simulator'}
+                </button>
+              </div>
+
+              {showSimulator && (
+                <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {simError && (
+                    <div style={{
+                      backgroundColor: 'var(--danger-bg)',
+                      color: 'var(--danger)',
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.8125rem',
+                      border: '1px solid var(--danger-border)',
+                    }}>
+                      {simError}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', padding: '0.75rem', backgroundColor: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Simulated Recipient</label>
+                      <select
+                        className="input-field"
+                        value={simUserEmail}
+                        onChange={(e) => setSimUserEmail(e.target.value)}
+                        style={{ fontSize: '0.8125rem' }}
+                      >
+                        <option value="">-- Choose Member to Test --</option>
+                        {orgUsers?.filter(u => u.id !== doc.owner_id).map(u => (
+                          <option key={u.id} value={u.email}>
+                            {u.display_name} ({u.email}) - {u.role}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ width: '140px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Proposed Level</label>
+                      <select
+                        className="input-field"
+                        value={simPermLevel}
+                        onChange={(e) => setSimPermLevel(e.target.value as 'read' | 'edit')}
+                        style={{ fontSize: '0.8125rem' }}
+                      >
+                        <option value="read">Read Only</option>
+                        <option value="edit">Edit Metadata</option>
+                      </select>
+                    </div>
+
+                    <div style={{ width: '150px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Proposed Expiry</label>
+                      <select
+                        className="input-field"
+                        value={simExpiryPreset}
+                        onChange={(e) => setSimExpiryPreset(e.target.value as any)}
+                        style={{ fontSize: '0.8125rem' }}
+                      >
+                        <option value="never">Never (Indefinite)</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="24h">24 Hours</option>
+                        <option value="7d">7 Days</option>
+                        <option value="30d">30 Days</option>
+                        <option value="custom">Custom Date</option>
+                      </select>
+                    </div>
+
+                    {simExpiryPreset === 'custom' && (
+                      <div style={{ width: '180px' }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Custom Date</label>
+                        <input
+                          type="datetime-local"
+                          className="input-field"
+                          value={simCustomExpiry}
+                          onChange={(e) => setSimCustomExpiry(e.target.value)}
+                          style={{ fontSize: '0.8125rem' }}
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleRunSimulation()}
+                      disabled={!simUserEmail || isSimulating}
+                      style={{ height: '36px', padding: '0 0.875rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                    >
+                      <Sliders size={13} />
+                      <span>{isSimulating ? 'Simulating...' : 'Run Simulation'}</span>
+                    </button>
+                  </div>
+
+                  {simResult && (
+                    <div style={{
+                      padding: '1rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      backgroundColor: simResult.status === 'allowed' 
+                        ? 'rgba(34, 197, 94, 0.05)' 
+                        : simResult.status === 'additional_requirements_needed' 
+                          ? 'rgba(234, 179, 8, 0.05)' 
+                          : 'rgba(239, 68, 68, 0.05)',
+                    }}>
+                      {/* Status Banner */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {simResult.status === 'allowed' ? (
+                            <CheckCircle2 size={18} color="#16a34a" />
+                          ) : simResult.status === 'additional_requirements_needed' ? (
+                            <AlertTriangle size={18} color="#d97706" />
+                          ) : (
+                            <XCircle size={18} color="#dc2626" />
+                          )}
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: '0.9375rem',
+                            color: simResult.status === 'allowed' ? '#16a34a' : simResult.status === 'additional_requirements_needed' ? '#d97706' : '#dc2626',
+                          }}>
+                            {simResult.status === 'allowed'
+                              ? 'Simulation Allowed: Proposal Meets All Security Policies'
+                              : simResult.status === 'additional_requirements_needed'
+                                ? 'Simulation Flagged: Additional Requirements Required'
+                                : 'Simulation Denied: Prohibited by Policy'}
+                          </span>
+                        </div>
+
+                        {simResult.is_allowed && isOwner && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={handleApplySimToGrant}
+                            style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          >
+                            <Key size={12} />
+                            <span>Pre-fill Grant Form</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--graphite)', margin: '0 0 0.75rem 0' }}>
+                        {simResult.summary}
+                      </p>
+
+                      {/* Diff & Access Comparison Card */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                        gap: '0.75rem',
+                        padding: '0.75rem',
+                        backgroundColor: 'var(--bg-surface)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border)',
+                        marginBottom: '0.75rem',
+                        fontSize: '0.8125rem',
+                      }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase' }}>Classification</span>
+                          <span className={`badge ${
+                            simResult.classification === 'Highly Restricted' ? 'badge-danger' : simResult.classification === 'Confidential' ? 'badge-copper' : 'badge-secondary'
+                          }`} style={{ marginTop: '0.25rem', display: 'inline-block' }}>
+                            {simResult.classification}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase' }}>Current Access</span>
+                          <span style={{ fontWeight: 600, color: 'var(--graphite)', textTransform: 'capitalize' }}>
+                            {simResult.current_permission_level || 'None'}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase' }}>Proposed Access</span>
+                          <span style={{ fontWeight: 600, color: 'var(--copper-dark)', textTransform: 'capitalize' }}>
+                            {simResult.proposed_permission}
+                          </span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase' }}>Access Impact</span>
+                          <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>
+                            {simResult.current_permission_level === simResult.proposed_permission 
+                              ? 'No change in level' 
+                              : simResult.current_permission_level 
+                                ? 'Permission level updated' 
+                                : 'New access grant'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Evaluated Rules Checklist */}
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.375rem' }}>
+                          Policy Rules Evaluated ({simResult.evaluated_rules.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                          {simResult.evaluated_rules.map((rule, idx) => (
+                            <div key={idx} style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.5rem',
+                              padding: '0.375rem 0.5rem',
+                              backgroundColor: 'var(--bg-surface)',
+                              borderRadius: 'var(--radius-xs)',
+                              border: '1px solid var(--border)',
+                              fontSize: '0.8125rem',
+                            }}>
+                              <span style={{ marginTop: '2px' }}>
+                                {rule.passed ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
+                              </span>
+                              <div>
+                                <span style={{ fontWeight: 600, color: 'var(--graphite)', marginRight: '0.5rem' }}>{rule.name}:</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{rule.details}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Failures and Remediation */}
+                      {simResult.failures && simResult.failures.length > 0 && (
+                        <div style={{
+                          padding: '0.5rem 0.75rem',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          borderRadius: 'var(--radius-xs)',
+                          marginBottom: '0.5rem',
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dc2626', marginBottom: '0.25rem' }}>
+                            Policy Violations / Unmet Requirements:
+                          </div>
+                          {simResult.failures.map((f, i) => (
+                            <div key={i} style={{ fontSize: '0.8125rem', color: '#991b1b' }}>• {f}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {simResult.remediation && (
+                        <div style={{
+                          padding: '0.5rem 0.75rem',
+                          backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                          borderRadius: 'var(--radius-xs)',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.5rem',
+                          fontSize: '0.8125rem',
+                        }}>
+                          <Info size={15} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <div>
+                            <strong style={{ color: '#1d4ed8' }}>Remediation: </strong>
+                            <span style={{ color: '#1e3a8a' }}>{simResult.remediation}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -959,6 +1465,198 @@ export const DocumentDetailPage: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB: VERSION HISTORY ================= */}
+      {activeTab === 'versions' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Upload Revision Card for editors/owners */}
+          {canEdit && (
+            <div className="panel" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <UploadCloud size={16} color="var(--copper-dark)" />
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                  Upload New Revision
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Uploading a revision creates an immutable new version and sets it as current. Previous versions remain preserved and can be restored at any time.
+              </p>
+              <form onSubmit={handleUploadVersion} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.375rem' }}>
+                      Select File *
+                    </label>
+                    <input
+                      type="file"
+                      className="form-input"
+                      required
+                      onChange={(e) => setNewVersionFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.375rem' }}>
+                      Change Summary / Reason (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Added section 4 review feedback"
+                      value={newVersionSummary}
+                      onChange={(e) => setNewVersionSummary(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={!newVersionFile || isUploadingVersion}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    {isUploadingVersion ? (
+                      <>
+                        <Clock size={15} className="spin" />
+                        <span>Uploading Revision...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={15} />
+                        <span>Upload Revision</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Versions Table */}
+          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--graphite)', margin: 0 }}>
+                  Revision History
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+                  Immutable record of all revisions with SHA-256 cryptographic verification.
+                </p>
+              </div>
+              <span className="badge badge-secondary">
+                {versionsData?.total || 0} {versionsData?.total === 1 ? 'version' : 'versions'}
+              </span>
+            </div>
+
+            {versionsLoading ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                Loading version history...
+              </div>
+            ) : !versionsData?.versions || versionsData.versions.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                No versions found.
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Version</th>
+                      <th>Filename</th>
+                      <th>Uploaded (IST)</th>
+                      <th>Uploader</th>
+                      <th>Size</th>
+                      <th>SHA-256 Integrity</th>
+                      <th>Notes</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versionsData.versions.map((ver) => (
+                      <tr key={ver.id} style={{ backgroundColor: ver.is_current ? 'rgba(217, 154, 103, 0.05)' : undefined }}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>v{ver.version_number}</span>
+                            {ver.is_current && (
+                              <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}>
+                                Current
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: 500 }}>{ver.original_filename}</td>
+                        <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                          {formatToIST(ver.created_at)}
+                        </td>
+                        <td style={{ fontSize: '0.8125rem' }}>
+                          <div>{ver.uploader_name || 'System'}</div>
+                          {ver.uploader_email && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{ver.uploader_email}</div>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+                          {(ver.file_size / 1024).toFixed(1)} KB
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                            <span title="Integrity Verified" style={{ display: 'inline-flex' }}>
+                              <CheckCircle size={14} color="#16a34a" />
+                            </span>
+                            <code style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              {ver.checksum.substring(0, 8)}...{ver.checksum.substring(ver.checksum.length - 6)}
+                            </code>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '0.15rem 0.35rem' }}
+                              onClick={() => {
+                                navigator.clipboard.writeText(ver.checksum);
+                                setCopiedVersionChecksum(ver.id);
+                                setTimeout(() => setCopiedVersionChecksum(null), 2000);
+                              }}
+                              title="Copy full SHA-256 hash"
+                            >
+                              {copiedVersionChecksum === ver.id ? <Check size={12} color="#16a34a" /> : <Copy size={12} />}
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', maxWidth: '200px' }}>
+                          {ver.change_summary || '-'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleDownloadVersion(ver.id, ver.original_filename)}
+                              title="Download this version"
+                              style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.5rem' }}
+                            >
+                              <Download size={13} />
+                              <span>Download</span>
+                            </button>
+                            {canEdit && !ver.is_current && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => handleRestoreVersion(ver.id, ver.version_number)}
+                                title="Restore this version as new current version"
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.5rem' }}
+                              >
+                                <RotateCcw size={13} />
+                                <span>Restore</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1461,6 +2159,20 @@ export const DocumentDetailPage: React.FC = () => {
                   <option value="Engineering">Engineering</option>
                   <option value="HR">HR</option>
                   <option value="General">General</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Classification Security Policy</label>
+                <select
+                  className="input-field"
+                  value={editClassification}
+                  onChange={(e) => setEditClassification(e.target.value)}
+                  disabled={!isOwner && user?.role !== 'admin'}
+                >
+                  <option value="Internal">Internal (Standard confidentiality)</option>
+                  <option value="Confidential">Confidential (Max 90 days grant duration)</option>
+                  <option value="Highly Restricted">Highly Restricted (No downloads, Max 7 days, MFA required)</option>
                 </select>
               </div>
 
