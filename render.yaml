@@ -2,16 +2,13 @@ services:
   # Backend API Web Service
   - type: web
     name: trustvault-api
-    plan: starter
+    plan: free
     runtime: python
+    autoDeploy: true
     rootDir: backend
     buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
-    disk:
-      name: trustvault-storage-disk
-      mountPath: /data/vault_storage
-      sizeGB: 10
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
@@ -40,6 +37,7 @@ services:
   - type: web
     name: trustvault-ui
     runtime: static
+    autoDeploy: true
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist

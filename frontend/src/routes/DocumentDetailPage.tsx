@@ -368,6 +368,8 @@ export const DocumentDetailPage: React.FC = () => {
         setConfirmConfig(prev => ({ ...prev, isLoading: true }));
         try {
           await api.deleteDocument(doc.id);
+          queryClient.invalidateQueries({ queryKey: ['documents'] });
+          queryClient.invalidateQueries({ queryKey: ['trashedDocuments'] });
           toast.success('Document deleted successfully.');
           navigate('/documents');
         } catch (err: any) {
